@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Timebutler",
+        "description": "Lege in Timebutler einen persönlichen Zugriffstoken an (beginnt mit tb_) und füge ihn hier ein.",
+        "data": {"api_token": "Persönlicher Zugriffstoken"}
+      },
+      "reauth_confirm": {
+        "title": "Timebutler",
+        "description": "Timebutler hat den gespeicherten Token abgelehnt. Gib einen neuen persönlichen Zugriffstoken desselben Kontos ein.",
+        "data": {"api_token": "Persönlicher Zugriffstoken"}
+      }
+    },
+    "error": {
+      "invalid_auth": "Timebutler hat den Token abgelehnt.",
+      "cannot_connect": "Timebutler ist nicht erreichbar.",
+      "unknown": "Unerwarteter Fehler, siehe Log."
+    },
+    "abort": {
+      "already_configured": "Dieses Timebutler-Konto ist bereits eingerichtet.",
+      "reauth_successful": "Der Token wurde aktualisiert.",
+      "wrong_account": "Der Token gehört zu einem anderen Timebutler-Konto."
+    }
+  }
+}

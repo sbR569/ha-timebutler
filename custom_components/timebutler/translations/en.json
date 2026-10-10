@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Timebutler",
+        "description": "Create a personal access token (starts with tb_) in Timebutler and paste it here.",
+        "data": {"api_token": "Personal access token"}
+      },
+      "reauth_confirm": {
+        "title": "Timebutler",
+        "description": "Timebutler rejected the stored token. Enter a new personal access token of the same account.",
+        "data": {"api_token": "Personal access token"}
+      }
+    },
+    "error": {
+      "invalid_auth": "Timebutler rejected the token.",
+      "cannot_connect": "Timebutler could not be reached.",
+      "unknown": "Unexpected error, see the log."
+    },
+    "abort": {
+      "already_configured": "This Timebutler account is already set up.",
+      "reauth_successful": "The token was updated.",
+      "wrong_account": "The token belongs to a different Timebutler account."
+    }
+  }
+}
