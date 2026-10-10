@@ -75,6 +75,23 @@ automation:
         state: "on"
     actions:
       - action: timebutler.stop
+        continue_on_error: true
+```
+
+A stop that needs a break-regulation decision raises an error and fires the `timebutler_break_regulation` event instead.
+
+### Example: react to the break regulation
+
+```yaml
+automation:
+  - alias: Pausenregelung melden
+    triggers:
+      - trigger: event
+        event_type: timebutler_break_regulation
+    actions:
+      - action: notify.notify
+        data:
+          message: "Timebutler: {{ trigger.event.data.detail }}"
 ```
 
 ## Development

@@ -123,14 +123,21 @@ async def _assignment(
     if value:
         response = await call_api(hass, entry, fetch(), {})
         with checked_input():
-            return assignment_id(value, response.get(list_key) or [], None, unknown_key)
+            try:
+                return assignment_id(value, response.get(list_key) or [], None, unknown_key)
+            except ValueError as err:
+                raise _error("invalid_assignment") from err
     try:
         response = await fetch()
     except TimebutlerError as err:
         # Only the default is missing; the action itself must still work.
         _LOGGER.debug("No %s default from Timebutler: %s", list_key, err)
         return None
-    return assignment_id(None, [], response.get(default_key), unknown_key)
+    try:
+        return assignment_id(None, [], response.get(default_key), unknown_key)
+    except ValueError:
+        _LOGGER.debug("Ignoring non-numeric %s from Timebutler", default_key)
+        return None
 
 
 async def async_assignments(
@@ -190,7 +197,7 @@ async def async_stop(
     if response is not None and response.get("outcome") == "confirmationRequired":
         info = response.get("breakRegulation") or {}
         _report_break_regulation(hass, entry, info)
-        raise _error("break_regulation_confirmation", detail=str(info.get("detailText") or ""))
+        raise _error("break_regulation_confirmation", detail=str(info.get("detailText") or "-"))
     persistent_notification.async_dismiss(hass, _notification_id(entry))
     _push_clock(entry, {"status": "idle"})
     await runtime.live.async_request_refresh()
@@ -263,6 +270,7 @@ async def async_delete_absence(
 
 ADD_TIME_ENTRY_ERRORS = {400: "time_entry_invalid", 403: "time_entry_forbidden", 422: "remarks_too_long"}
 DELETE_TIME_ENTRY_ERRORS = {
+    400: "clock_disabled",
     403: "time_entry_delete_forbidden",
     404: "time_entry_unknown_id",
     409: "month_closed",

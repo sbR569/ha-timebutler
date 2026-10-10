@@ -159,6 +159,30 @@ async def test_stop_still_works_without_project_list(hass, aioclient_mock, froze
     assert api_calls(aioclient_mock, "POST", "/time-clock/stop") == [{}]
 
 
+async def test_stop_ignores_non_numeric_default_project(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    projects = {**load_fixture_json("projects"), "defaultProjectId": "abc"}
+    _mock_assignments(aioclient_mock, {"json": projects})
+    aioclient_mock.post(f"{API_BASE}/time-clock/stop", json=load_fixture_json("stop_saved"))
+
+    await _call(hass, "stop")
+
+    assert api_calls(aioclient_mock, "POST", "/time-clock/stop") == [{"categoryId": 0}]
+
+
+async def test_stop_rejects_non_numeric_project_id(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    projects = {"projects": [{"id": "abc", "name": "Broken"}], "defaultProjectId": "5"}
+    _mock_assignments(aioclient_mock, {"json": projects})
+    aioclient_mock.post(f"{API_BASE}/time-clock/stop", json=load_fixture_json("stop_saved"))
+
+    with pytest.raises(HomeAssistantError) as err:
+        await _call(hass, "stop", {"project": "Broken"})
+
+    assert err.value.translation_key == "invalid_assignment"
+    assert api_calls(aioclient_mock, "POST", "/time-clock/stop") == []
+
+
 async def test_stop_of_waiting_clock(hass, aioclient_mock, frozen_now):
     await setup_integration(hass, aioclient_mock)
     _mock_assignments(aioclient_mock)
@@ -318,7 +342,7 @@ async def test_delete_absence_needs_reason(hass, aioclient_mock, frozen_now):
     assert err.value.translation_key == "absence_reason_required"
 
 
-@pytest.mark.parametrize("data", [{}, {"id": "3", "date": "2026-10-28"}])
+@pytest.mark.parametrize("data", [{}, {"id": "3", "date": "2026-10-28"}, {"id": ".."}, {"id": "abc"}])
 async def test_delete_absence_needs_exactly_id_or_date(hass, aioclient_mock, frozen_now, data):
     await setup_integration(hass, aioclient_mock)
 
@@ -411,10 +435,38 @@ async def test_delete_time_entry_in_closed_month(hass, aioclient_mock, frozen_no
 
 @pytest.mark.parametrize(
     "data",
-    [{}, {"id": "9", "date": "2026-10-07"}, {"id": "9", "start_time": "06:00"}],
+    [{}, {"id": "9", "date": "2026-10-07"}, {"id": "9", "start_time": "06:00"}, {"id": ".."}, {"id": "abc"}],
 )
 async def test_delete_time_entry_needs_id_or_date(hass, aioclient_mock, frozen_now, data):
     await setup_integration(hass, aioclient_mock)
 
     with pytest.raises((vol.Invalid, ServiceValidationError)):
         await _call(hass, "delete_time_entry", data)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "service", "data", "status", "key"),
+    [
+        ("post", "/time-clock/stop", "stop", {}, 400, "invalid_assignment"),
+        ("post", "/time-clock/stop", "stop", {}, 403, "terminal_only"),
+        ("post", "/time-clock/stop", "stop", {}, 409, "clock_stop_conflict"),
+        ("delete", "/absence-requests/3", "delete_absence", {"id": "3", "reason": "x"}, 403, "absence_delete_forbidden"),
+        ("delete", "/absence-requests/3", "delete_absence", {"id": "3", "reason": "x"}, 404, "absence_unknown_id"),
+        ("post", "/time-tracking/clock-entry", "add_time_entry", {"date": "2026-10-06", "start_time": "08:00", "end_time": "09:00"}, 400, "time_entry_invalid"),
+        ("post", "/time-tracking/clock-entry", "add_time_entry", {"date": "2026-10-06", "start_time": "08:00", "end_time": "09:00"}, 422, "remarks_too_long"),
+        ("delete", "/time-entries/9", "delete_time_entry", {"id": "9"}, 400, "clock_disabled"),
+        ("delete", "/time-entries/9", "delete_time_entry", {"id": "9"}, 403, "time_entry_delete_forbidden"),
+        ("delete", "/time-entries/9", "delete_time_entry", {"id": "9"}, 404, "time_entry_unknown_id"),
+    ],
+)
+async def test_write_errors_are_translated(hass, aioclient_mock, frozen_now, method, path, service, data, status, key):
+    await setup_integration(hass, aioclient_mock)
+    _mock_assignments(aioclient_mock)
+    getattr(aioclient_mock, method)(f"{API_BASE}{path}", status=status)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await _call(hass, service, data)
+    await hass.async_block_till_done()
+
+    assert err.value.translation_key == key
+    assert not _reauth_started(hass)

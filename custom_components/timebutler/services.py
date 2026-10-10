@@ -47,7 +47,7 @@ REQUEST_ABSENCE_SCHEMA = BASE_SCHEMA.extend(
         vol.Required("start_date"): cv.date,
         vol.Optional("end_date"): cv.date,
         vol.Optional("half_day"): vol.In(["morning", "afternoon"]),
-        vol.Optional("hours"): vol.Coerce(float),
+        vol.Optional("hours"): vol.All(vol.Coerce(float), vol.Range(min=0, max=24)),
         vol.Optional("comments"): cv.string,
         vol.Optional("substitute"): cv.string,
     }
@@ -55,7 +55,7 @@ REQUEST_ABSENCE_SCHEMA = BASE_SCHEMA.extend(
 DELETE_ABSENCE_SCHEMA = vol.All(
     BASE_SCHEMA.extend(
         {
-            vol.Optional("id"): cv.string,
+            vol.Optional("id"): vol.All(cv.string, vol.Match(r"^\d+$")),
             vol.Optional("date"): cv.date,
             vol.Optional("reason"): cv.string,
         }
@@ -79,7 +79,7 @@ ADD_TIME_ENTRY_SCHEMA = BASE_SCHEMA.extend(
 DELETE_TIME_ENTRY_SCHEMA = vol.All(
     BASE_SCHEMA.extend(
         {
-            vol.Optional("id"): cv.string,
+            vol.Optional("id"): vol.All(cv.string, vol.Match(r"^\d+$")),
             vol.Optional("date"): cv.date,
             vol.Optional("start_time"): cv.time,
         }

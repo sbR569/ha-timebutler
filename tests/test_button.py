@@ -1,6 +1,7 @@
 """Time clock buttons: availability per clock state and pressing."""
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 from custom_components.timebutler.button import BUTTONS
@@ -86,6 +87,16 @@ async def test_press_pause(hass, aioclient_mock, frozen_now):
     assert api_calls(aioclient_mock, "POST", "/time-clock/pause") == [None]
     assert hass.states.get("sensor.timebutler_stempeluhr").state == "paused"
     assert _available(hass) == {"fortsetzen", "stopp", "stopp_pausenkorrektur"}
+
+
+async def test_press_pause_refused_by_terminal_only(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    aioclient_mock.post(f"{API_BASE}/time-clock/pause", status=403)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await _press(hass, "pause")
+
+    assert err.value.translation_key == "terminal_only"
 
 
 async def test_press_stop_with_break_correction(hass, aioclient_mock, frozen_now):

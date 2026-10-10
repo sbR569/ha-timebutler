@@ -18,7 +18,7 @@
     },
     "error": {
       "invalid_auth": "Timebutler hat den Token abgelehnt.",
-      "cannot_connect": "Timebutler ist nicht erreichbar.",
+      "cannot_connect": "Timebutler ist nicht erreichbar oder hat mit einem Fehler geantwortet.",
       "unknown": "Unerwarteter Fehler, siehe Log."
     },
     "abort": {

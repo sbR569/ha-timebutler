@@ -18,7 +18,7 @@
     },
     "error": {
       "invalid_auth": "Timebutler rejected the token.",
-      "cannot_connect": "Timebutler could not be reached.",
+      "cannot_connect": "Timebutler could not be reached or answered with an error.",
       "unknown": "Unexpected error, see the log."
     },
     "abort": {
