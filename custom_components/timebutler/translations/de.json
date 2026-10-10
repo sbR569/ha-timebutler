@@ -231,6 +231,66 @@
           "description": "Grund für eine Stornoanfrage."
         }
       }
+    },
+    "add_time_entry": {
+      "name": "Zeiteintrag nachtragen",
+      "description": "Trägt einen abgeschlossenen Zeiteintrag nach (Zeiten in der Zeitzone von Home Assistant, am selben Tag).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        },
+        "date": {
+          "name": "Datum",
+          "description": "Tag des Eintrags."
+        },
+        "start_time": {
+          "name": "Beginn",
+          "description": "Startzeit."
+        },
+        "end_time": {
+          "name": "Ende",
+          "description": "Endzeit, nach dem Beginn am selben Tag."
+        },
+        "break_minutes": {
+          "name": "Pause",
+          "description": "Pause innerhalb des Eintrags in Minuten."
+        },
+        "project": {
+          "name": "Projekt",
+          "description": "Projektname oder ID; ohne Angabe dein Standardprojekt."
+        },
+        "category": {
+          "name": "Kategorie",
+          "description": "Kategoriename oder ID; ohne Angabe deine Standardkategorie."
+        },
+        "remarks": {
+          "name": "Bemerkung",
+          "description": "Notiz zum Zeiteintrag."
+        }
+      }
+    },
+    "delete_time_entry": {
+      "name": "Zeiteintrag löschen",
+      "description": "Löscht einen Zeiteintrag oder beantragt seine Löschung.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        },
+        "date": {
+          "name": "Datum",
+          "description": "Tag des Eintrags."
+        },
+        "start_time": {
+          "name": "Beginn",
+          "description": "Startzeit; nötig, wenn der Tag mehrere Einträge hat."
+        },
+        "id": {
+          "name": "ID",
+          "description": "ID des Zeiteintrags, statt Datum und Beginn."
+        }
+      }
     }
   },
   "selector": {
@@ -349,6 +409,36 @@
     },
     "absence_delete_forbidden": {
       "message": "Dieser Antrag kann weder gelöscht noch storniert werden."
+    },
+    "end_not_after_start": {
+      "message": "Die Endzeit muss nach der Startzeit liegen (am selben Tag)."
+    },
+    "break_too_long": {
+      "message": "Die Pause muss kürzer sein als die {minutes} Minuten des Eintrags."
+    },
+    "time_entry_invalid": {
+      "message": "Timebutler hat den Zeiteintrag abgelehnt."
+    },
+    "time_entry_forbidden": {
+      "message": "Du darfst keine Zeiteinträge anlegen."
+    },
+    "remarks_too_long": {
+      "message": "Die Bemerkung ist zu lang."
+    },
+    "time_entry_not_found": {
+      "message": "Kein passender Zeiteintrag am {date}."
+    },
+    "time_entry_ambiguous": {
+      "message": "Mehrere Zeiteinträge am {date}, bitte start_time angeben: {times}"
+    },
+    "time_entry_unknown_id": {
+      "message": "Timebutler kennt keinen Zeiteintrag mit dieser ID."
+    },
+    "time_entry_delete_forbidden": {
+      "message": "Diesen Zeiteintrag darfst du nicht löschen."
+    },
+    "month_closed": {
+      "message": "Der Monat ist abgeschlossen, der Eintrag kann nicht mehr gelöscht werden."
     }
   }
 }

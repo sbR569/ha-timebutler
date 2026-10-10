@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, time
 import logging
 from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.util import dt as dt_util
 
 from .api import (
     TimebutlerAuthError,
@@ -26,9 +27,11 @@ from .model import (
     assignment_id,
     break_regulation_message,
     find_absence,
+    find_time_entry,
     match_item,
     parse_clock,
     stop_result,
+    time_entry_body,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -256,3 +259,62 @@ async def async_delete_absence(
     result = await call_api(hass, entry, client.delete_absence(absence_id, reason), DELETE_ABSENCE_ERRORS)
     await runtime.background.async_request_refresh()
     return {"id": result.get("id") or absence_id, "result": result.get("result")}
+
+
+ADD_TIME_ENTRY_ERRORS = {400: "time_entry_invalid", 403: "time_entry_forbidden", 422: "remarks_too_long"}
+DELETE_TIME_ENTRY_ERRORS = {
+    403: "time_entry_delete_forbidden",
+    404: "time_entry_unknown_id",
+    409: "month_closed",
+}
+
+
+async def _refresh_all(entry: TimebutlerConfigEntry) -> None:
+    await entry.runtime_data.live.async_request_refresh()
+    await entry.runtime_data.background.async_request_refresh()
+
+
+async def async_add_time_entry(
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    *,
+    day: date,
+    start: time,
+    end: time,
+    break_minutes: int = 0,
+    project: str | None = None,
+    category: str | None = None,
+    remarks: str | None = None,
+) -> dict[str, Any]:
+    """Add a completed time entry, times in Home Assistant's time zone."""
+    with checked_input():
+        body = time_entry_body(day, start, end, break_minutes, remarks, dt_util.get_default_time_zone())
+    body.update(await async_assignments(hass, entry, project, category))
+    client = entry.runtime_data.live.client
+    created = await call_api(hass, entry, client.add_clock_entry(body), ADD_TIME_ENTRY_ERRORS)
+    await _refresh_all(entry)
+    return {
+        "id": created.get("id"),
+        "gearbeitet": created.get("workedMinutes"),
+        "pause": created.get("breakMinutes"),
+    }
+
+
+async def async_delete_time_entry(
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    *,
+    time_entry_id: str | None = None,
+    day: date | None = None,
+    start: time | None = None,
+) -> dict[str, Any]:
+    """Delete a time entry, or ask for its deletion."""
+    client = entry.runtime_data.live.client
+    if time_entry_id is None:
+        assert day is not None  # the service schema requires id or date
+        entries = await call_api(hass, entry, client.get_time_entries(day.year, day.month), {})
+        with checked_input():
+            time_entry_id = find_time_entry(entries, day, start)
+    result = await call_api(hass, entry, client.delete_time_entry(time_entry_id), DELETE_TIME_ENTRY_ERRORS)
+    await _refresh_all(entry)
+    return {"id": result.get("id") or time_entry_id, "result": result.get("result")}

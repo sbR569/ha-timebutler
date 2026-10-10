@@ -18,7 +18,14 @@ from homeassistant.core import (
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .actions import async_clock_action, async_delete_absence, async_request_absence, async_stop
+from .actions import (
+    async_add_time_entry,
+    async_clock_action,
+    async_delete_absence,
+    async_delete_time_entry,
+    async_request_absence,
+    async_stop,
+)
 from .const import DOMAIN
 from .coordinator import TimebutlerConfigEntry
 
@@ -55,6 +62,31 @@ DELETE_ABSENCE_SCHEMA = vol.All(
     ),
     cv.has_at_least_one_key("id", "date"),
     cv.has_at_most_one_key("id", "date"),
+)
+
+
+ADD_TIME_ENTRY_SCHEMA = BASE_SCHEMA.extend(
+    {
+        vol.Required("date"): cv.date,
+        vol.Required("start_time"): cv.time,
+        vol.Required("end_time"): cv.time,
+        vol.Optional("break_minutes", default=0): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional("project"): cv.string,
+        vol.Optional("category"): cv.string,
+        vol.Optional("remarks"): cv.string,
+    }
+)
+DELETE_TIME_ENTRY_SCHEMA = vol.All(
+    BASE_SCHEMA.extend(
+        {
+            vol.Optional("id"): cv.string,
+            vol.Optional("date"): cv.date,
+            vol.Optional("start_time"): cv.time,
+        }
+    ),
+    cv.has_at_least_one_key("id", "date"),
+    cv.has_at_most_one_key("id", "date"),
+    cv.has_at_most_one_key("id", "start_time"),
 )
 
 
@@ -143,5 +175,42 @@ def async_setup_services(hass: HomeAssistant) -> None:
         "delete_absence",
         handle_delete_absence,
         schema=DELETE_ABSENCE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    async def handle_add_time_entry(call: ServiceCall) -> ServiceResponse:
+        return await async_add_time_entry(
+            hass,
+            resolve_entry(hass, call),
+            day=call.data["date"],
+            start=call.data["start_time"],
+            end=call.data["end_time"],
+            break_minutes=call.data["break_minutes"],
+            project=call.data.get("project"),
+            category=call.data.get("category"),
+            remarks=call.data.get("remarks"),
+        )
+
+    async def handle_delete_time_entry(call: ServiceCall) -> ServiceResponse:
+        return await async_delete_time_entry(
+            hass,
+            resolve_entry(hass, call),
+            time_entry_id=call.data.get("id"),
+            day=call.data.get("date"),
+            start=call.data.get("start_time"),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        "add_time_entry",
+        handle_add_time_entry,
+        schema=ADD_TIME_ENTRY_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "delete_time_entry",
+        handle_delete_time_entry,
+        schema=DELETE_TIME_ENTRY_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )

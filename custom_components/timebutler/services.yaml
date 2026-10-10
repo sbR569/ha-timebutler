@@ -81,3 +81,49 @@ delete_absence:
       selector:
         text:
           multiline: true
+add_time_entry:
+  fields:
+    config_entry_id: *config_entry_id
+    date:
+      required: true
+      selector:
+        date:
+    start_time:
+      required: true
+      selector:
+        time:
+    end_time:
+      required: true
+      selector:
+        time:
+    break_minutes:
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 720
+          unit_of_measurement: min
+          mode: box
+    project:
+      example: Kundenprojekt A
+      selector:
+        text:
+    category:
+      selector:
+        text:
+    remarks:
+      selector:
+        text:
+          multiline: true
+delete_time_entry:
+  fields:
+    config_entry_id: *config_entry_id
+    date:
+      selector:
+        date:
+    start_time:
+      selector:
+        time:
+    id:
+      selector:
+        text:

@@ -1,6 +1,6 @@
 # Timebutler for Home Assistant
 
-Custom integration that shows your own [Timebutler](https://timebutler.com) data in Home Assistant and lets you operate the time clock: clock state and controls, worked time today/this week/this month, vacation balance and upcoming absences. Uses the Timebutler API v2 with a personal access token.
+Custom integration that shows your own [Timebutler](https://timebutler.com) data in Home Assistant and lets you act on it: time clock state and controls, worked time today/this week/this month, vacation balance and upcoming absences, plus services to request or delete absences and to add or delete time entries. Uses the Timebutler API v2 with a personal access token.
 
 ## Installation (HACS)
 
@@ -53,6 +53,8 @@ All services take an optional `config_entry_id`; it is only needed when several 
 | `timebutler.stop` | `project`, `category` (name or ID; default: your Timebutler defaults), `remarks`, `break_regulation` (`apply`/`ignore`) | `outcome`, `id`, `gearbeitet`, `pause` |
 | `timebutler.request_absence` | `type` (code like `URL` or name like `Urlaub`), `start_date`, `end_date`, `half_day` (`morning`/`afternoon`), `hours` (only `UEB`/`AUA`), `comments`, `substitute` (name or ID) | `id`, `status`, `tage` |
 | `timebutler.delete_absence` | `date` (a day of the absence) or `id`, `reason` | `id`, `result` (`deleted` or `cancellation_requested`) |
+| `timebutler.add_time_entry` | `date`, `start_time`, `end_time` (same day, HA time zone), `break_minutes`, `project`, `category`, `remarks` | `id`, `gearbeitet`, `pause` |
+| `timebutler.delete_time_entry` | `date` (+ `start_time` when the day has several entries) or `id` | `id`, `result` (`deleted` or `deletion_requested`) |
 
 ### Break regulation
 

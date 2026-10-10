@@ -324,3 +324,97 @@ async def test_delete_absence_needs_exactly_id_or_date(hass, aioclient_mock, fro
 
     with pytest.raises((vol.Invalid, ServiceValidationError)):
         await _call(hass, "delete_absence", data)
+
+
+async def test_add_time_entry(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    remock(aioclient_mock)
+    _mock_assignments(aioclient_mock)
+    aioclient_mock.post(f"{API_BASE}/time-tracking/clock-entry", json=load_fixture_json("clock_entry"))
+
+    result = await _call(
+        hass,
+        "add_time_entry",
+        {"date": "2026-10-06", "start_time": "08:00", "end_time": "16:30", "break_minutes": 30, "project": "Intern", "remarks": "Nachtrag"},
+        response=True,
+    )
+
+    assert result == {"id": "10", "gearbeitet": 480, "pause": 30}
+    # The test instance runs in US/Pacific (UTC-7 in October).
+    assert api_calls(aioclient_mock, "POST", "/time-tracking/clock-entry") == [
+        {
+            "startTimestamp": 1791298800000,
+            "endTimestamp": 1791329400000,
+            "pauseSeconds": 1800,
+            "remarks": "Nachtrag",
+            "projectId": 6,
+            "categoryId": 0,
+        }
+    ]
+    assert api_calls(aioclient_mock, "GET", "/time-tracking/work-summary")
+    assert api_calls(aioclient_mock, "GET", "/time-entries/my")
+
+
+async def test_add_time_entry_rejects_end_before_start(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _call(hass, "add_time_entry", {"date": "2026-10-06", "start_time": "16:30", "end_time": "08:00"})
+
+    assert err.value.translation_key == "end_not_after_start"
+
+
+async def test_add_time_entry_forbidden(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    _mock_assignments(aioclient_mock)
+    aioclient_mock.post(f"{API_BASE}/time-tracking/clock-entry", status=403)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await _call(hass, "add_time_entry", {"date": "2026-10-06", "start_time": "08:00", "end_time": "09:00"})
+
+    assert err.value.translation_key == "time_entry_forbidden"
+
+
+async def test_delete_time_entry_by_date_and_start(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    remock(aioclient_mock)
+    aioclient_mock.delete(f"{API_BASE}/time-entries/8", json={"id": "8", "result": "deleted"})
+
+    result = await _call(hass, "delete_time_entry", {"date": "2026-10-06", "start_time": "18:00"}, response=True)
+
+    assert result == {"id": "8", "result": "deleted"}
+    assert api_calls(aioclient_mock, "DELETE", "/time-entries/8") == [None]
+    fetched = [url for method, url, _, _ in aioclient_mock.mock_calls if method.upper() == "GET" and url.path.endswith("/time-entries/my")]
+    assert fetched[0].query["year"] == "2026"
+    assert fetched[0].query["month"] == "10"
+
+
+async def test_delete_time_entry_ambiguous(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+
+    with pytest.raises(ServiceValidationError) as err:
+        await _call(hass, "delete_time_entry", {"date": "2026-10-06"})
+
+    assert err.value.translation_key == "time_entry_ambiguous"
+    assert err.value.translation_placeholders == {"date": "2026-10-06", "times": "08:00, 18:00"}
+
+
+async def test_delete_time_entry_in_closed_month(hass, aioclient_mock, frozen_now):
+    await setup_integration(hass, aioclient_mock)
+    aioclient_mock.delete(f"{API_BASE}/time-entries/9", status=409)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await _call(hass, "delete_time_entry", {"id": "9"})
+
+    assert err.value.translation_key == "month_closed"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{}, {"id": "9", "date": "2026-10-07"}, {"id": "9", "start_time": "06:00"}],
+)
+async def test_delete_time_entry_needs_id_or_date(hass, aioclient_mock, frozen_now, data):
+    await setup_integration(hass, aioclient_mock)
+
+    with pytest.raises((vol.Invalid, ServiceValidationError)):
+        await _call(hass, "delete_time_entry", data)

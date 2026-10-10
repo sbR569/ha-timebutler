@@ -231,6 +231,66 @@
           "description": "Reason for a cancellation request."
         }
       }
+    },
+    "add_time_entry": {
+      "name": "Add time entry",
+      "description": "Adds a completed time entry (times in Home Assistant's time zone, same day).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Day of the entry."
+        },
+        "start_time": {
+          "name": "Start",
+          "description": "Start time."
+        },
+        "end_time": {
+          "name": "End",
+          "description": "End time, after the start on the same day."
+        },
+        "break_minutes": {
+          "name": "Break",
+          "description": "Break within the entry, in minutes."
+        },
+        "project": {
+          "name": "Project",
+          "description": "Project name or ID; defaults to your default project."
+        },
+        "category": {
+          "name": "Category",
+          "description": "Category name or ID; defaults to your default category."
+        },
+        "remarks": {
+          "name": "Remarks",
+          "description": "Note for the time entry."
+        }
+      }
+    },
+    "delete_time_entry": {
+      "name": "Delete time entry",
+      "description": "Deletes a time entry or asks for its deletion.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Day of the entry."
+        },
+        "start_time": {
+          "name": "Start",
+          "description": "Start time; needed when the day has several entries."
+        },
+        "id": {
+          "name": "ID",
+          "description": "ID of the time entry, instead of date and start."
+        }
+      }
     }
   },
   "selector": {
@@ -349,6 +409,36 @@
     },
     "absence_delete_forbidden": {
       "message": "This absence request can neither be deleted nor cancelled."
+    },
+    "end_not_after_start": {
+      "message": "The end time must be after the start time (same day)."
+    },
+    "break_too_long": {
+      "message": "The break must be shorter than the entry's {minutes} minutes."
+    },
+    "time_entry_invalid": {
+      "message": "Timebutler rejected the time entry."
+    },
+    "time_entry_forbidden": {
+      "message": "You may not create time entries."
+    },
+    "remarks_too_long": {
+      "message": "The remarks are too long."
+    },
+    "time_entry_not_found": {
+      "message": "No matching time entry on {date}."
+    },
+    "time_entry_ambiguous": {
+      "message": "Several time entries on {date}, pass start_time: {times}"
+    },
+    "time_entry_unknown_id": {
+      "message": "Timebutler knows no time entry with this ID."
+    },
+    "time_entry_delete_forbidden": {
+      "message": "You may not delete this time entry."
+    },
+    "month_closed": {
+      "message": "The month is closed; the entry can no longer be deleted."
     }
   }
 }
