@@ -74,5 +74,160 @@
         "name": "Next absence"
       }
     }
+  },
+  "services": {
+    "start": {
+      "name": "Start clock",
+      "description": "Starts the Timebutler time clock.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        }
+      }
+    },
+    "pause": {
+      "name": "Pause clock",
+      "description": "Pauses the running time clock.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        }
+      }
+    },
+    "resume": {
+      "name": "Resume clock",
+      "description": "Resumes the paused time clock.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        }
+      }
+    },
+    "cancel": {
+      "name": "Discard session",
+      "description": "Discards the current clock session without saving a time entry.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        }
+      }
+    },
+    "business_trip_start": {
+      "name": "Start business trip",
+      "description": "Marks the start of a business trip on the active clock.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        }
+      }
+    },
+    "business_trip_end": {
+      "name": "End business trip",
+      "description": "Ends the business trip on the active clock.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        }
+      }
+    },
+    "stop": {
+      "name": "Stop clock",
+      "description": "Stops the clock and saves the time entry.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        },
+        "project": {
+          "name": "Project",
+          "description": "Project name or ID; defaults to your default project."
+        },
+        "category": {
+          "name": "Category",
+          "description": "Category name or ID; defaults to your default category."
+        },
+        "remarks": {
+          "name": "Remarks",
+          "description": "Note for the time entry."
+        },
+        "break_regulation": {
+          "name": "Break regulation",
+          "description": "Decision when the session violates the break regulation."
+        }
+      }
+    }
+  },
+  "selector": {
+    "break_regulation": {
+      "options": {
+        "apply": "Apply the correction",
+        "ignore": "Save unchanged"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Timebutler rejected the token. Re-authenticate the integration."
+    },
+    "connection_error": {
+      "message": "Timebutler could not be reached."
+    },
+    "request_rejected": {
+      "message": "Timebutler refused the request (HTTP {status})."
+    },
+    "entry_required": {
+      "message": "Select the Timebutler account (config_entry_id): none or several are loaded."
+    },
+    "entry_not_found": {
+      "message": "Unknown Timebutler account."
+    },
+    "entry_not_loaded": {
+      "message": "This Timebutler account is not loaded."
+    },
+    "clock_disabled": {
+      "message": "Time tracking or the time clock is not active for your company."
+    },
+    "business_trip_disabled": {
+      "message": "Business trips are not enabled for your company."
+    },
+    "terminal_only": {
+      "message": "You may use the time clock only at the time recording terminal."
+    },
+    "clock_start_conflict": {
+      "message": "The clock is already running or cannot be started right now."
+    },
+    "clock_not_running": {
+      "message": "The clock is not running."
+    },
+    "clock_not_paused": {
+      "message": "The clock is not paused."
+    },
+    "clock_already_idle": {
+      "message": "The clock is already off."
+    },
+    "business_trip_conflict": {
+      "message": "The clock is not active, or the business trip is already running or not running."
+    },
+    "clock_stop_conflict": {
+      "message": "Cannot stop: clock not active, session shorter than one minute, or duplicate entry."
+    },
+    "invalid_assignment": {
+      "message": "Timebutler rejected the project or category."
+    },
+    "unknown_project": {
+      "message": "Unknown project \"{name}\". Available: {options}"
+    },
+    "unknown_category": {
+      "message": "Unknown category \"{name}\". Available: {options}"
+    },
+    "break_regulation_confirmation": {
+      "message": "Break regulation: {detail}. Nothing was saved, the clock keeps running – see the notification."
+    }
   }
 }

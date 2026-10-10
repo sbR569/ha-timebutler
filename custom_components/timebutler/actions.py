@@ -1,0 +1,192 @@
+"""Actions on Timebutler, shared by buttons and services."""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+import logging
+from typing import Any
+
+from homeassistant.components import persistent_notification
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+
+from .api import (
+    TimebutlerAuthError,
+    TimebutlerError,
+    TimebutlerRequestError,
+)
+from .const import DOMAIN, EVENT_BREAK_REGULATION
+from .coordinator import LiveData, TimebutlerConfigEntry
+from .model import (
+    InputError,
+    assignment_id,
+    break_regulation_message,
+    parse_clock,
+    stop_result,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+_CLOCK_REFUSALS = {400: "clock_disabled", 403: "terminal_only"}
+_TRIP_REFUSALS = {400: "business_trip_disabled", 403: "terminal_only", 409: "business_trip_conflict"}
+CLOCK_ERRORS: dict[str, dict[int, str]] = {
+    "start": {**_CLOCK_REFUSALS, 409: "clock_start_conflict"},
+    "pause": {**_CLOCK_REFUSALS, 409: "clock_not_running"},
+    "resume": {**_CLOCK_REFUSALS, 409: "clock_not_paused"},
+    "cancel": {**_CLOCK_REFUSALS, 409: "clock_already_idle"},
+    "business_trip_start": _TRIP_REFUSALS,
+    "business_trip_end": _TRIP_REFUSALS,
+}
+STOP_ERRORS = {400: "invalid_assignment", 403: "terminal_only", 409: "clock_stop_conflict"}
+
+
+def _error(key: str, **placeholders: str) -> HomeAssistantError:
+    return HomeAssistantError(
+        translation_domain=DOMAIN, translation_key=key, translation_placeholders=placeholders or None
+    )
+
+
+@contextmanager
+def checked_input() -> Iterator[None]:
+    """Report InputError from the model as a translated validation error."""
+    try:
+        yield
+    except InputError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key=err.key,
+            translation_placeholders=err.placeholders or None,
+        ) from err
+
+
+async def call_api[T](
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    request: Awaitable[T],
+    errors: dict[int, str],
+) -> T:
+    """Await one API call; client errors become translated HA errors."""
+    try:
+        return await request
+    except TimebutlerAuthError as err:
+        entry.async_start_reauth(hass)
+        raise _error("auth_failed") from err
+    except TimebutlerRequestError as err:
+        _LOGGER.debug("Timebutler refused a request: %s", err)
+        if err.status in errors:
+            raise _error(errors[err.status]) from err
+        raise _error("request_rejected", status=str(err.status)) from err
+    except TimebutlerError as err:
+        raise _error("connection_error") from err
+
+
+def _notification_id(entry: TimebutlerConfigEntry) -> str:
+    return f"{DOMAIN}_break_regulation_{entry.entry_id}"
+
+
+def _push_clock(entry: TimebutlerConfigEntry, status: dict[str, Any]) -> None:
+    """Show the new clock state at once instead of waiting for the next poll."""
+    live = entry.runtime_data.live
+    today = live.data.today if live.data else None
+    live.async_set_updated_data(LiveData(clock=parse_clock(status), today=today))
+
+
+async def async_clock_action(hass: HomeAssistant, entry: TimebutlerConfigEntry, action: str) -> None:
+    """Start, pause, resume or cancel the clock, or start/end a business trip."""
+    runtime = entry.runtime_data
+    status = await call_api(hass, entry, runtime.live.client.clock(action), CLOCK_ERRORS[action])
+    _push_clock(entry, status)
+    if action == "cancel":
+        persistent_notification.async_dismiss(hass, _notification_id(entry))
+    await runtime.live.async_request_refresh()
+
+
+async def _assignment(
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    value: str | None,
+    fetch: Callable[[], Awaitable[dict[str, Any]]],
+    list_key: str,
+    default_key: str,
+    unknown_key: str,
+) -> int | None:
+    """ID to send for a project/category; None leaves the field out."""
+    if value:
+        response = await call_api(hass, entry, fetch(), {})
+        with checked_input():
+            return assignment_id(value, response.get(list_key) or [], None, unknown_key)
+    try:
+        response = await fetch()
+    except TimebutlerError as err:
+        # Only the default is missing; the action itself must still work.
+        _LOGGER.debug("No %s default from Timebutler: %s", list_key, err)
+        return None
+    return assignment_id(None, [], response.get(default_key), unknown_key)
+
+
+async def async_assignments(
+    hass: HomeAssistant, entry: TimebutlerConfigEntry, project: str | None, category: str | None
+) -> dict[str, int]:
+    """projectId/categoryId fields for a new time entry."""
+    client = entry.runtime_data.live.client
+    body: dict[str, int] = {}
+    project_id = await _assignment(
+        hass, entry, project, client.get_projects, "projects", "defaultProjectId", "unknown_project"
+    )
+    if project_id is not None:
+        body["projectId"] = project_id
+    category_id = await _assignment(
+        hass, entry, category, client.get_categories, "categories", "defaultCategoryId", "unknown_category"
+    )
+    if category_id is not None:
+        body["categoryId"] = category_id
+    return body
+
+
+def _report_break_regulation(hass: HomeAssistant, entry: TimebutlerConfigEntry, info: dict[str, Any]) -> None:
+    hass.bus.async_fire(
+        EVENT_BREAK_REGULATION,
+        {
+            "config_entry_id": entry.entry_id,
+            "detail": info.get("detailText"),
+            "obligatory": bool(info.get("obligatory")),
+            "has_no_remedy": bool(info.get("hasNoRemedy")),
+            "correction_work_minutes": info.get("correctionWorkMinutes"),
+            "correction_break_minutes": info.get("correctionBreakMinutes"),
+            "resulting_work_minutes": info.get("resultingWorkMinutes"),
+            "resulting_break_minutes": info.get("resultingBreakMinutes"),
+        },
+    )
+    title, message = break_regulation_message(info, hass.config.language)
+    persistent_notification.async_create(hass, message, title=title, notification_id=_notification_id(entry))
+
+
+async def async_stop(
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    *,
+    project: str | None = None,
+    category: str | None = None,
+    remarks: str | None = None,
+    break_regulation: str | None = None,
+) -> dict[str, Any]:
+    """Stop and save the clock; asks back when the break regulation is violated."""
+    runtime = entry.runtime_data
+    body: dict[str, Any] = await async_assignments(hass, entry, project, category)
+    if remarks:
+        body["remarks"] = remarks
+    if break_regulation:
+        body["breakRegulation"] = break_regulation
+    response = await call_api(hass, entry, runtime.live.client.clock_stop(body), STOP_ERRORS)
+    if response is not None and response.get("outcome") == "confirmationRequired":
+        info = response.get("breakRegulation") or {}
+        _report_break_regulation(hass, entry, info)
+        raise _error("break_regulation_confirmation", detail=str(info.get("detailText") or ""))
+    persistent_notification.async_dismiss(hass, _notification_id(entry))
+    _push_clock(entry, {"status": "idle"})
+    await runtime.live.async_request_refresh()
+    # The pushed state hides the clock-out from the live coordinator, so the
+    # week/month refresh it would trigger is requested here.
+    await runtime.background.async_request_refresh()
+    return stop_result(response)

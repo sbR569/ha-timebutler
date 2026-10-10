@@ -1,0 +1,33 @@
+start: &clock_action
+  fields:
+    config_entry_id: &config_entry_id
+      selector:
+        config_entry:
+          integration: timebutler
+pause: *clock_action
+resume: *clock_action
+cancel: *clock_action
+business_trip_start: *clock_action
+business_trip_end: *clock_action
+stop:
+  fields:
+    config_entry_id: *config_entry_id
+    project:
+      example: Kundenprojekt A
+      selector:
+        text:
+    category:
+      example: Entwicklung
+      selector:
+        text:
+    remarks:
+      selector:
+        text:
+          multiline: true
+    break_regulation:
+      selector:
+        select:
+          options:
+            - apply
+            - ignore
+          translation_key: break_regulation

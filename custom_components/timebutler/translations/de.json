@@ -74,5 +74,160 @@
         "name": "Nächste Abwesenheit"
       }
     }
+  },
+  "services": {
+    "start": {
+      "name": "Stempeluhr starten",
+      "description": "Startet die Timebutler-Stempeluhr.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    },
+    "pause": {
+      "name": "Stempeluhr pausieren",
+      "description": "Pausiert die laufende Stempeluhr.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    },
+    "resume": {
+      "name": "Stempeluhr fortsetzen",
+      "description": "Setzt die pausierte Stempeluhr fort.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    },
+    "cancel": {
+      "name": "Sitzung verwerfen",
+      "description": "Verwirft die laufende Sitzung, ohne einen Zeiteintrag zu speichern.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    },
+    "business_trip_start": {
+      "name": "Dienstreise starten",
+      "description": "Markiert den Beginn einer Dienstreise auf der aktiven Uhr.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    },
+    "business_trip_end": {
+      "name": "Dienstreise beenden",
+      "description": "Beendet die Dienstreise auf der aktiven Uhr.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        }
+      }
+    },
+    "stop": {
+      "name": "Stempeluhr stoppen",
+      "description": "Stoppt die Uhr und speichert den Zeiteintrag.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        },
+        "project": {
+          "name": "Projekt",
+          "description": "Projektname oder ID; ohne Angabe dein Standardprojekt."
+        },
+        "category": {
+          "name": "Kategorie",
+          "description": "Kategoriename oder ID; ohne Angabe deine Standardkategorie."
+        },
+        "remarks": {
+          "name": "Bemerkung",
+          "description": "Notiz zum Zeiteintrag."
+        },
+        "break_regulation": {
+          "name": "Pausenregelung",
+          "description": "Entscheidung, wenn die Sitzung die Pausenregelung verletzt."
+        }
+      }
+    }
+  },
+  "selector": {
+    "break_regulation": {
+      "options": {
+        "apply": "Korrektur übernehmen",
+        "ignore": "Unverändert speichern"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Timebutler hat den Token abgelehnt. Bitte die Integration neu anmelden."
+    },
+    "connection_error": {
+      "message": "Timebutler ist nicht erreichbar."
+    },
+    "request_rejected": {
+      "message": "Timebutler hat die Anfrage abgelehnt (HTTP {status})."
+    },
+    "entry_required": {
+      "message": "Bitte das Timebutler-Konto angeben (config_entry_id): keins oder mehrere sind geladen."
+    },
+    "entry_not_found": {
+      "message": "Unbekanntes Timebutler-Konto."
+    },
+    "entry_not_loaded": {
+      "message": "Dieses Timebutler-Konto ist nicht geladen."
+    },
+    "clock_disabled": {
+      "message": "Zeiterfassung oder Stempeluhr ist für deine Firma nicht aktiv."
+    },
+    "business_trip_disabled": {
+      "message": "Dienstreisen sind für deine Firma nicht aktiviert."
+    },
+    "terminal_only": {
+      "message": "Stempeln ist für dich nur am Terminal erlaubt."
+    },
+    "clock_start_conflict": {
+      "message": "Die Uhr läuft bereits oder kann gerade nicht gestartet werden."
+    },
+    "clock_not_running": {
+      "message": "Die Uhr läuft nicht."
+    },
+    "clock_not_paused": {
+      "message": "Die Uhr ist nicht pausiert."
+    },
+    "clock_already_idle": {
+      "message": "Die Uhr ist bereits aus."
+    },
+    "business_trip_conflict": {
+      "message": "Die Uhr ist nicht aktiv oder die Dienstreise läuft bereits bzw. nicht."
+    },
+    "clock_stop_conflict": {
+      "message": "Stoppen nicht möglich: Uhr nicht aktiv, Sitzung kürzer als eine Minute oder doppelter Eintrag."
+    },
+    "invalid_assignment": {
+      "message": "Timebutler hat Projekt oder Kategorie abgelehnt."
+    },
+    "unknown_project": {
+      "message": "Unbekanntes Projekt „{name}“. Verfügbar: {options}"
+    },
+    "unknown_category": {
+      "message": "Unbekannte Kategorie „{name}“. Verfügbar: {options}"
+    },
+    "break_regulation_confirmation": {
+      "message": "Pausenregelung: {detail}. Nichts gespeichert, die Uhr läuft weiter – siehe Benachrichtigung."
+    }
   }
 }

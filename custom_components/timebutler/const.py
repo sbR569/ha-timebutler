@@ -13,3 +13,5 @@ REQUEST_TIMEOUT = 20
 LIVE_INTERVAL = timedelta(seconds=60)
 BACKGROUND_INTERVAL = timedelta(minutes=15)
 UPCOMING_LIMIT = 5
+
+EVENT_BREAK_REGULATION = f"{DOMAIN}_break_regulation"
