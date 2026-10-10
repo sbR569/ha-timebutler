@@ -198,3 +198,76 @@ def upcoming_absences(
         }
         for request in selected[:limit]
     ]
+
+
+class InputError(Exception):
+    """Invalid action input; `key` is the translation key of the message."""
+
+    def __init__(self, key: str, **placeholders: str) -> None:
+        super().__init__(key)
+        self.key = key
+        self.placeholders = placeholders
+
+
+def match_item(value: str, items: list[dict[str, Any]], unknown_key: str) -> str:
+    """ID of the item whose ID, else name, equals value (case-insensitive)."""
+    wanted = value.strip().casefold()
+    for field in ("id", "name"):
+        for item in items:
+            if str(item.get(field) or "").strip().casefold() == wanted:
+                return str(item.get("id"))
+    names = ", ".join(str(item.get("name")) for item in items)
+    raise InputError(unknown_key, name=value, options=names or "-")
+
+
+def assignment_id(
+    value: str | None, items: list[dict[str, Any]], default_id: str | None, unknown_key: str
+) -> int:
+    """projectId/categoryId to send: the named one, else the default, else 0 (none)."""
+    if value:
+        return int(match_item(value, items, unknown_key))
+    return int(default_id) if default_id else 0
+
+
+def stop_result(response: dict[str, Any] | None) -> dict[str, Any]:
+    """Service response of a stop; None means a waiting clock was discarded."""
+    if response is None:
+        return {"outcome": "discarded"}
+    return {
+        "outcome": "saved",
+        "id": response.get("id"),
+        "gearbeitet": response.get("workedMinutes"),
+        "pause": response.get("breakMinutes"),
+    }
+
+
+_BREAK_TEXT = {
+    "de": {
+        "title": "Timebutler: Pausenregelung",
+        "intro": "{detail}\n\nNichts wurde gespeichert, die Uhr läuft weiter.",
+        "apply": "Korrektur übernehmen: **Stopp mit Pausenkorrektur** drücken oder `timebutler.stop` mit `break_regulation: apply` aufrufen.",
+        "ignore": "Unverändert speichern: `timebutler.stop` mit `break_regulation: ignore` aufrufen.",
+        "no_remedy": "Eine automatische Korrektur ist nicht möglich.",
+        "discard": "Sitzung verwerfen: **Verwerfen** drücken oder `timebutler.cancel` aufrufen.",
+    },
+    "en": {
+        "title": "Timebutler: break regulation",
+        "intro": "{detail}\n\nNothing was saved, the clock keeps running.",
+        "apply": "Accept the correction: press **Stop with break correction** or call `timebutler.stop` with `break_regulation: apply`.",
+        "ignore": "Save unchanged: call `timebutler.stop` with `break_regulation: ignore`.",
+        "no_remedy": "The violation cannot be corrected automatically.",
+        "discard": "Discard the session: press **Discard** or call `timebutler.cancel`.",
+    },
+}
+
+
+def break_regulation_message(info: dict[str, Any], language: str) -> tuple[str, str]:
+    """Title and text of the notification asking for a break-regulation decision."""
+    text = _BREAK_TEXT["de" if language.lower().startswith("de") else "en"]
+    parts = [text["intro"].format(detail=info.get("detailText") or "")]
+    parts.append(text["no_remedy"] if info.get("hasNoRemedy") else text["apply"])
+    if not info.get("obligatory"):
+        parts.append(text["ignore"])
+    if info.get("hasNoRemedy"):
+        parts.append(text["discard"])
+    return text["title"], "\n\n".join(parts)

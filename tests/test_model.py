@@ -6,10 +6,15 @@ import pytest
 
 from custom_components.timebutler.model import (
     ClockState,
+    InputError,
     TodaySummary,
+    assignment_id,
+    break_regulation_message,
+    match_item,
     month_minutes,
     months_needed,
     parse_clock,
+    stop_result,
     summary_includes_running,
     today_summary,
     upcoming_absences,
@@ -214,3 +219,76 @@ def test_detection_tolerates_a_lagging_or_deducted_summary(worked):
     summary = {**SUMMARY, "workedMinutes": worked}
 
     assert summary_includes_running(summary, _clock(minutes=180), ENTRIES, NOW) is True
+
+
+PROJECTS = load_fixture_json("projects")["projects"]
+BREAK_INFO = load_fixture_json("stop_confirmation")["breakRegulation"]
+
+
+def test_match_item_by_id_or_name():
+    assert match_item("6", PROJECTS, "unknown_project") == "6"
+    assert match_item("  kundenprojekt a ", PROJECTS, "unknown_project") == "5"
+
+
+def test_match_item_prefers_ids_over_names():
+    items = [{"id": "1", "name": "2"}, {"id": "2", "name": "Zwei"}]
+
+    assert match_item("2", items, "unknown_project") == "2"
+
+
+def test_match_item_unknown_lists_names():
+    with pytest.raises(InputError) as err:
+        match_item("Extern", PROJECTS, "unknown_project")
+
+    assert err.value.key == "unknown_project"
+    assert err.value.placeholders == {"name": "Extern", "options": "Kundenprojekt A, Intern"}
+
+
+def test_match_item_unknown_without_items():
+    with pytest.raises(InputError) as err:
+        match_item("Extern", [], "unknown_category")
+
+    assert err.value.placeholders["options"] == "-"
+
+
+def test_assignment_id_uses_value_then_default_then_zero():
+    assert assignment_id("Intern", PROJECTS, "5", "unknown_project") == 6
+    assert assignment_id(None, PROJECTS, "5", "unknown_project") == 5
+    assert assignment_id("", [], None, "unknown_project") == 0
+
+
+def test_stop_result():
+    assert stop_result(load_fixture_json("stop_saved")) == {
+        "outcome": "saved",
+        "id": "98765",
+        "gearbeitet": 180,
+        "pause": 0,
+    }
+    assert stop_result(None) == {"outcome": "discarded"}
+
+
+def test_break_regulation_message_offers_apply_and_ignore():
+    title, message = break_regulation_message(BREAK_INFO, "de")
+
+    assert title == "Timebutler: Pausenregelung"
+    assert message.startswith("Required change: working time -0:30, break +0:30")
+    assert "break_regulation: apply" in message
+    assert "break_regulation: ignore" in message
+    assert "timebutler.cancel" not in message
+
+
+def test_break_regulation_message_obligatory_hides_ignore():
+    _, message = break_regulation_message({**BREAK_INFO, "obligatory": True}, "en")
+
+    assert "break_regulation: apply" in message
+    assert "ignore" not in message
+
+
+def test_break_regulation_message_without_remedy_offers_discard():
+    info = {**BREAK_INFO, "hasNoRemedy": True, "obligatory": True}
+
+    title, message = break_regulation_message(info, "en-GB")
+
+    assert title == "Timebutler: break regulation"
+    assert "break_regulation: apply" not in message
+    assert "timebutler.cancel" in message
