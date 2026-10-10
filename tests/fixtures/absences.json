@@ -1,0 +1,7 @@
+[
+  {"id": "1", "type": "URL", "startDate": "2026-08-03", "endDate": "2026-08-14", "days": 10.0, "hours": null, "status": "approved", "halfDay": null, "substitutePending": null, "medicalCertificateProvided": null},
+  {"id": "2", "type": "URL", "startDate": "2026-12-21", "endDate": "2026-12-31", "days": 7.0, "hours": null, "status": "pending", "halfDay": null, "substitutePending": null, "medicalCertificateProvided": null},
+  {"id": "3", "type": "URL", "startDate": "2026-10-26", "endDate": "2026-10-30", "days": 5.0, "hours": null, "status": "approved", "halfDay": null, "substitutePending": null, "medicalCertificateProvided": null},
+  {"id": "4", "type": "URL", "startDate": "2026-11-02", "endDate": "2026-11-06", "days": 5.0, "hours": null, "status": "rejected", "halfDay": null, "substitutePending": null, "medicalCertificateProvided": null},
+  {"id": "5", "type": "XYZ", "startDate": "2026-11-20", "endDate": "2026-11-20", "days": 0.5, "hours": null, "status": "approved", "halfDay": "morning", "substitutePending": null, "medicalCertificateProvided": null}
+]

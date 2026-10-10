@@ -1,0 +1,4 @@
+[
+  {"id": "URL", "name": "Urlaub", "needsApproval": true, "requiresMedicalCertificate": false, "halfDaysAllowed": true},
+  {"id": "GLZ", "name": "Gleitzeit", "needsApproval": true, "requiresMedicalCertificate": false, "halfDaysAllowed": true}
+]
