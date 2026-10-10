@@ -1,0 +1,49 @@
+{% macro hm(m) %}{% set m = m | int(0) %}{{ m // 60 }}:{{ '%02d' | format(m % 60) }}{% endmacro %}
+{% macro num(x) %}{{ (x | float(0) | round(1) | string).replace('.0', '').replace('.', ',') }}{% endmacro %}
+{% set c = 'sensor.timebutler_stempeluhr' %}{% set s = states(c) %}{% set seit = state_attr(c, 'seit') %}
+{% set w = states('sensor.timebutler_arbeitszeit_heute') %}{% set z = states('sensor.timebutler_soll_heute') %}
+{% set r = states('sensor.timebutler_rest_heute') | int(0) %}{% set pa = states('sensor.timebutler_pause_heute') | int(0) %}
+{% set p = states('sensor.timebutler_fortschritt_heute') | int(0) %}{% set td = now().date().isoformat() %}
+{% set st = {'running': 'Läuft', 'paused': 'Pause', 'waiting': 'Wartet', 'idle': 'Ausgestempelt'}.get(s, 'Unbekannt') %}
+{% set dot = {'running': '#5FD38D', 'paused': '#FFC857', 'waiting': '#FFC857'}.get(s, '#5C6577') %}
+{% set box = 'background:#1A1F29;border-radius:14px;padding:14px 16px' %}
+{% set tile = 'background:#141820;border-radius:10px;padding:8px 10px;min-width:0' %}
+<div style='font-size:15px;color:#E8EBF0;font-variant-numeric:tabular-nums;line-height:1.35;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start'>
+<div style='display:flex;flex-direction:column;gap:12px'>
+<div style='{{ box }}'>
+<div style='display:flex;align-items:center;gap:0.5em'><span style='width:0.7em;height:0.7em;border-radius:999px;background:{{ dot }}'></span><span style='font-weight:600;font-size:1.1em'>Heute</span><span style='margin-left:auto;color:#9BA4B4'>{{ st }}{{ (' seit ' ~ (as_timestamp(seit) | timestamp_custom('%H:%M'))) if seit else '' }}</span></div>
+<div style='display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px'>
+{% for label, val in [('Ist', hm(w) ~ ' h'), ('Soll', hm(z) ~ ' h'), ('Überstunden' if r < 0 else 'Rest', hm(r | abs) ~ ' h'), ('Pause', pa ~ ' min')] %}<div style='{{ tile }}'><div style='font-size:0.8em;color:#9BA4B4'>{{ label }}</div><div style='font-weight:600;font-size:1.1em;white-space:nowrap'>{{ val if is_number(w) else '–' }}</div></div>{% endfor %}
+</div>
+<div style='height:0.6em;border-radius:999px;background:#262B35;overflow:hidden;margin-top:12px'><div style='height:100%;width:{{ [p, 100] | min }}%;background:#8EC5FF'></div></div>
+<div style='font-size:0.8em;color:#9BA4B4;margin-top:4px;text-align:right'>{{ p }} %</div>
+</div>
+{% set v = 'sensor.timebutler_urlaub_rest' %}
+<div style='{{ box }}'>
+<div style='font-weight:600;font-size:1.1em'>Urlaubskonto</div>
+<div style='display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px'>
+{% for label, val in [('Rest', states(v)), ('Gesamt', state_attr(v, 'gesamt')), ('Genehmigt', state_attr(v, 'genehmigt')), ('Beantragt', state_attr(v, 'beantragt')), ('Krank', states('sensor.timebutler_krankheitstage'))] %}<div style='{{ tile }}'><div style='font-size:0.8em;color:#9BA4B4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{{ label }}</div><div style='font-weight:600;white-space:nowrap'>{{ (num(val) ~ ' T') if is_number(val) else '–' }}</div></div>{% endfor %}
+</div>
+</div>
+{% set ls = state_attr('sensor.timebutler_naechste_abwesenheit', 'liste') or [] %}
+<div style='{{ box }}'>
+<div style='font-weight:600;font-size:1.1em'>Nächste Abwesenheiten</div>
+{% if ls %}<div style='display:flex;flex-direction:column;gap:6px;margin-top:10px'>{% for a in ls %}<div style='display:flex;align-items:center;gap:0.6em;background:#141820;border-radius:10px;padding:8px 10px;min-width:0'><span style='font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{{ a.art }}</span><span style='color:#9BA4B4;white-space:nowrap'>{{ a.von[8:10] }}.{{ a.von[5:7] }}.{{ ('–' ~ a.bis[8:10] ~ '.' ~ a.bis[5:7] ~ '.') if a.bis != a.von else '' }}{{ (' · ' ~ {'morning': 'vormittags', 'afternoon': 'nachmittags'}[a.halbtags]) if a.halbtags in ['morning', 'afternoon'] else '' }}</span><span style='margin-left:auto;color:#9BA4B4;white-space:nowrap'>{{ num(a.tage) }} T</span><span style='flex:none;font-size:0.8em;border-radius:999px;padding:2px 8px;background:{{ '#1E3A2A' if a.status == 'approved' else '#3A3218' }};color:{{ '#5FD38D' if a.status == 'approved' else '#FFC857' }}'>{{ 'genehmigt' if a.status == 'approved' else 'beantragt' }}</span></div>{% endfor %}</div>{% else %}<div style='color:#9BA4B4;margin-top:8px'>Keine geplanten Abwesenheiten</div>{% endif %}
+</div>
+</div>
+<div style='display:flex;flex-direction:column;gap:12px'>
+{% set wk = state_attr('sensor.timebutler_arbeitszeit_woche', 'tage') or {} %}{% set mx = ([480] + (wk.values() | list)) | max %}
+<div style='{{ box }}'>
+<div style='display:flex;align-items:baseline'><span style='font-weight:600;font-size:1.1em'>Diese Woche</span><span style='margin-left:auto;color:#9BA4B4'>{{ hm(states('sensor.timebutler_arbeitszeit_woche')) }} h</span></div>
+<div style='display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px'>
+{% for d, m in wk | dictsort %}<div style='display:flex;flex-direction:column;align-items:center;gap:4px'><span style='font-size:0.8em;color:#9BA4B4;height:1.2em'>{{ hm(m) if m else '' }}</span><div style='height:90px;width:100%;display:flex;align-items:flex-end;justify-content:center'><div style='width:60%;height:{{ [(m / mx * 90) | round(0) | int, 2] | max }}px;border-radius:6px;background:{{ '#8EC5FF' if d == td else '#3A5577' }}'></div></div><span style='font-size:0.8em;color:{{ '#E8EBF0' if d == td else '#9BA4B4' }}'>{{ ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'][loop.index0] }}</span></div>{% endfor %}
+</div>
+</div>
+{% set mo = state_attr('sensor.timebutler_arbeitszeit_monat', 'tage') or {} %}{% set mm = ([480] + (mo.values() | list)) | max %}
+<div style='{{ box }}'>
+<div style='display:flex;align-items:baseline'><span style='font-weight:600;font-size:1.1em'>Dieser Monat</span><span style='margin-left:auto;color:#9BA4B4'>{{ hm(states('sensor.timebutler_arbeitszeit_monat')) }} h · {{ state_attr('sensor.timebutler_arbeitszeit_monat', 'arbeitstage') | int(0) }} Arbeitstage</span></div>
+<div style='display:flex;align-items:flex-end;gap:3px;height:56px;margin-top:10px'>{% for d, m in mo | dictsort %}<div style='flex:1;height:{{ [(m / mm * 56) | round(0) | int, 2] | max }}px;border-radius:3px;background:{{ '#8EC5FF' if d == td else ('#3A5577' if m else '#262B35') }}'></div>{% endfor %}</div>
+<div style='display:flex;justify-content:space-between;font-size:0.75em;color:#9BA4B4;margin-top:4px'><span>1.</span><span>{{ mo | count }}.</span></div>
+</div>
+</div>
+</div>

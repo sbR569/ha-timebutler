@@ -1,0 +1,26 @@
+{% macro hm(m) %}{% set m = m | int(0) %}{{ m // 60 }}:{{ '%02d' | format(m % 60) }}{% endmacro %}
+{% macro num(x) %}{{ (x | float(0) | round(1) | string).replace('.0', '').replace('.', ',') }}{% endmacro %}
+{% set c = 'sensor.timebutler_stempeluhr' %}{% set s = states(c) %}{% set seit = state_attr(c, 'seit') %}
+{% set on = is_state('binary_sensor.timebutler_eingestempelt', 'on') %}
+{% set w = states('sensor.timebutler_arbeitszeit_heute') %}{% set z = states('sensor.timebutler_soll_heute') %}
+{% set p = states('sensor.timebutler_fortschritt_heute') | int(0) %}{% set u = states('sensor.timebutler_urlaub_rest') %}
+{% set rt = states('input_datetime.timebutler_erinnerung') %}
+{% set late = on and rt not in ['unknown', 'unavailable'] and now() >= today_at(rt) %}
+{% if late %}{% set right = 'Noch eingestempelt!' %}{% elif on and seit %}{% set right = ('Pause · seit ' if s == 'paused' else 'seit ') ~ (as_timestamp(seit) | timestamp_custom('%H:%M')) %}{% elif s == 'waiting' %}{% set right = 'wartet' %}{% elif s == 'idle' %}{% set right = 'ausgestempelt' %}{% else %}{% set right = '' %}{% endif %}
+{% if s == 'unavailable' %}
+<div data-action='timebutler' style='font-size:16px;background:#1A1F29;border-radius:14px;padding:0.55em 0.8em;color:#9BA4B4'>Timebutler nicht erreichbar</div>
+{% else %}
+<div data-action='timebutler' style='font-size:16px;color:#E8EBF0;font-variant-numeric:tabular-nums;line-height:1.25;background:#1A1F29;border:1px solid {{ '#FF6B6B' if late else '#1A1F29' }};border-radius:14px;padding:0.4em 0.8em;display:flex;flex-direction:column;gap:0.25em'>
+<div style='display:flex;align-items:center;gap:0.5em;min-width:0'>
+<span style='flex:none;width:0.6em;height:0.6em;border-radius:999px;background:{{ {'running': '#5FD38D', 'paused': '#FFC857', 'waiting': '#FFC857'}.get(s, '#5C6577') }}'></span>
+<span style='font-weight:600'>Arbeitszeit</span>
+<ha-icon icon='mdi:chevron-right' style='flex:none;--mdc-icon-size:1.1em;color:#8EC5FF;margin-left:-0.2em'></ha-icon>
+<span style='margin-left:auto;font-size:0.85em;white-space:nowrap;color:{{ '#FF6B6B' if late else '#9BA4B4' }}'>{{ right }}</span>
+</div>
+<div style='display:flex;align-items:center;gap:0.6em;min-width:0'>
+<span style='font-weight:600;white-space:nowrap'>{{ (hm(w) ~ ' / ' ~ hm(z) ~ ' h') if is_number(w) and is_number(z) else '–' }}</span>
+<div style='flex:1;min-width:2em;height:0.4em;border-radius:999px;background:#262B35;overflow:hidden'><div style='height:100%;width:{{ [p, 100] | min }}%;background:#8EC5FF'></div></div>
+<span style='font-size:0.85em;color:#9BA4B4;white-space:nowrap'>Urlaub {{ num(u) if is_number(u) else '–' }} T</span>
+</div>
+</div>
+{% endif %}
