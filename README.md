@@ -25,7 +25,7 @@ When Timebutler rejects the token later, Home Assistant asks for a new one (reau
 | `sensor.timebutler_arbeitszeit_monat` | Minutes this month; attributes `tage`, `arbeitstage` |
 | `sensor.timebutler_urlaub_rest` | Vacation days left; attributes `gesamt`, `genehmigt`, `beantragt` |
 | `sensor.timebutler_krankheitstage` | Sick days this year |
-| `sensor.timebutler_naechste_abwesenheit` | Start date of the next approved or pending absence; attributes `art`, `bis`, `tage`, `status`, `halbtags`, `liste` (next 5) |
+| `sensor.timebutler_naechste_abwesenheit` | Start date of the next approved or pending absence; attributes `id`, `art`, `bis`, `tage`, `status`, `halbtags`, `liste` (next 5, each with `id`) |
 
 The clock and today's values refresh every minute, everything else every 15 minutes and right after you clock out.
 
@@ -51,6 +51,8 @@ All services take an optional `config_entry_id`; it is only needed when several 
 |---|---|---|
 | `timebutler.start`, `.pause`, `.resume`, `.cancel`, `.business_trip_start`, `.business_trip_end` | – | – |
 | `timebutler.stop` | `project`, `category` (name or ID; default: your Timebutler defaults), `remarks`, `break_regulation` (`apply`/`ignore`) | `outcome`, `id`, `gearbeitet`, `pause` |
+| `timebutler.request_absence` | `type` (code like `URL` or name like `Urlaub`), `start_date`, `end_date`, `half_day` (`morning`/`afternoon`), `hours` (only `UEB`/`AUA`), `comments`, `substitute` (name or ID) | `id`, `status`, `tage` |
+| `timebutler.delete_absence` | `date` (a day of the absence) or `id`, `reason` | `id`, `result` (`deleted` or `cancellation_requested`) |
 
 ### Break regulation
 

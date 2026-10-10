@@ -64,6 +64,8 @@ async def test_entities_report_live_and_background_data(hass, aioclient_mock, fr
     assert absence.attributes["bis"] == "2026-10-30"
     assert absence.attributes["tage"] == 5.0
     assert absence.attributes["status"] == "approved"
+    assert absence.attributes["id"] == "3"
+    assert [a["id"] for a in absence.attributes["liste"]] == ["3", "5", "2"]
     assert [a["von"] for a in absence.attributes["liste"]] == ["2026-10-26", "2026-11-20", "2026-12-21"]
 
 

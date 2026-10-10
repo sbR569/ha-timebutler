@@ -31,3 +31,53 @@ stop:
             - apply
             - ignore
           translation_key: break_regulation
+request_absence:
+  fields:
+    config_entry_id: *config_entry_id
+    type:
+      required: true
+      example: Urlaub
+      selector:
+        text:
+    start_date:
+      required: true
+      selector:
+        date:
+    end_date:
+      selector:
+        date:
+    half_day:
+      selector:
+        select:
+          options:
+            - morning
+            - afternoon
+          translation_key: half_day
+    hours:
+      selector:
+        number:
+          min: 0
+          max: 24
+          step: 0.25
+          mode: box
+    comments:
+      selector:
+        text:
+          multiline: true
+    substitute:
+      example: Erika Musterfrau
+      selector:
+        text:
+delete_absence:
+  fields:
+    config_entry_id: *config_entry_id
+    date:
+      selector:
+        date:
+    id:
+      selector:
+        text:
+    reason:
+      selector:
+        text:
+          multiline: true

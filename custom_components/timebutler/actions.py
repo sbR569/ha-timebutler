@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
+from datetime import date
 import logging
 from typing import Any
 
@@ -20,8 +21,12 @@ from .const import DOMAIN, EVENT_BREAK_REGULATION
 from .coordinator import LiveData, TimebutlerConfigEntry
 from .model import (
     InputError,
+    absence_body,
+    absence_type_code,
     assignment_id,
     break_regulation_message,
+    find_absence,
+    match_item,
     parse_clock,
     stop_result,
 )
@@ -190,3 +195,64 @@ async def async_stop(
     # week/month refresh it would trigger is requested here.
     await runtime.background.async_request_refresh()
     return stop_result(response)
+
+
+ABSENCE_ERRORS = {400: "absence_invalid", 403: "absence_type_forbidden", 409: "absence_overlap"}
+DELETE_ABSENCE_ERRORS = {
+    400: "absence_reason_required",
+    403: "absence_delete_forbidden",
+    404: "absence_unknown_id",
+}
+
+
+async def async_request_absence(
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    *,
+    absence_type: str,
+    start: date,
+    end: date | None = None,
+    half_day: str | None = None,
+    hours: float | None = None,
+    comments: str | None = None,
+    substitute: str | None = None,
+) -> dict[str, Any]:
+    """Submit an absence request for the user."""
+    runtime = entry.runtime_data
+    client = runtime.live.client
+    types = runtime.background.data.absence_types if runtime.background.data else {}
+    if not types:
+        types = {
+            str(item.get("id")): str(item.get("name"))
+            for item in await call_api(hass, entry, client.get_absence_types(), {})
+        }
+    with checked_input():
+        body = absence_body(absence_type_code(absence_type, types), start, end, half_day, hours, comments)
+    if substitute:
+        substitutes = await call_api(hass, entry, client.get_substitutes(), {})
+        with checked_input():
+            body["substituteEmployeeId"] = match_item(substitute, substitutes, "unknown_substitute")
+    created = await call_api(hass, entry, client.create_absence(body), ABSENCE_ERRORS)
+    await runtime.background.async_request_refresh()
+    return {"id": created.get("id"), "status": created.get("status"), "tage": created.get("days")}
+
+
+async def async_delete_absence(
+    hass: HomeAssistant,
+    entry: TimebutlerConfigEntry,
+    *,
+    absence_id: str | None = None,
+    day: date | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Delete an absence request, or ask for its cancellation."""
+    runtime = entry.runtime_data
+    client = runtime.live.client
+    if absence_id is None:
+        assert day is not None  # the service schema requires id or date
+        requests = await call_api(hass, entry, client.get_absence_requests(), {})
+        with checked_input():
+            absence_id = find_absence(requests, day)
+    result = await call_api(hass, entry, client.delete_absence(absence_id, reason), DELETE_ABSENCE_ERRORS)
+    await runtime.background.async_request_refresh()
+    return {"id": result.get("id") or absence_id, "result": result.get("result")}

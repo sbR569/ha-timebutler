@@ -171,6 +171,66 @@
           "description": "Decision when the session violates the break regulation."
         }
       }
+    },
+    "request_absence": {
+      "name": "Request absence",
+      "description": "Submits an absence or vacation request.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        },
+        "type": {
+          "name": "Type",
+          "description": "Absence type code (e.g. URL) or name (e.g. Urlaub)."
+        },
+        "start_date": {
+          "name": "Start date",
+          "description": "First day of the absence."
+        },
+        "end_date": {
+          "name": "End date",
+          "description": "Last day; defaults to the start date."
+        },
+        "half_day": {
+          "name": "Half day",
+          "description": "Morning or afternoon of a single day."
+        },
+        "hours": {
+          "name": "Hours",
+          "description": "Only for the overtime types UEB and AUA."
+        },
+        "comments": {
+          "name": "Comment",
+          "description": "Note visible to your managers."
+        },
+        "substitute": {
+          "name": "Substitute",
+          "description": "Name or employee ID of your substitute."
+        }
+      }
+    },
+    "delete_absence": {
+      "name": "Delete absence",
+      "description": "Deletes an absence request or asks for its cancellation.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Account",
+          "description": "Timebutler account; only needed when several are set up."
+        },
+        "date": {
+          "name": "Date",
+          "description": "A day of the absence (pending or approved)."
+        },
+        "id": {
+          "name": "ID",
+          "description": "ID of the absence request, instead of the date."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Reason for a cancellation request."
+        }
+      }
     }
   },
   "selector": {
@@ -178,6 +238,12 @@
       "options": {
         "apply": "Apply the correction",
         "ignore": "Save unchanged"
+      }
+    },
+    "half_day": {
+      "options": {
+        "morning": "Morning",
+        "afternoon": "Afternoon"
       }
     }
   },
@@ -238,6 +304,51 @@
     },
     "break_regulation_confirmation": {
       "message": "Break regulation: {detail}. Nothing was saved, the clock keeps running – see the notification."
+    },
+    "unknown_absence_type": {
+      "message": "Unknown absence type \"{name}\". Available: {options}"
+    },
+    "unknown_substitute": {
+      "message": "Unknown substitute \"{name}\". Available: {options}"
+    },
+    "end_before_start": {
+      "message": "The end date is before the start date."
+    },
+    "half_day_single_day": {
+      "message": "A half day must be a single day."
+    },
+    "hours_required": {
+      "message": "Overtime types (UEB, AUA) need hours greater than 0."
+    },
+    "overtime_single_day": {
+      "message": "Overtime types (UEB, AUA) must be a single day."
+    },
+    "hours_not_allowed": {
+      "message": "Hours are only allowed for the overtime types UEB and AUA."
+    },
+    "absence_invalid": {
+      "message": "Timebutler rejected the absence request."
+    },
+    "absence_type_forbidden": {
+      "message": "You may not enter this absence type."
+    },
+    "absence_overlap": {
+      "message": "The days overlap an existing absence."
+    },
+    "absence_not_found": {
+      "message": "No pending or approved absence on {date}."
+    },
+    "absence_ambiguous": {
+      "message": "Several absences on {date}, pass the ID: {ids}"
+    },
+    "absence_unknown_id": {
+      "message": "Timebutler knows no absence request with this ID."
+    },
+    "absence_reason_required": {
+      "message": "Your company requires a reason for the cancellation."
+    },
+    "absence_delete_forbidden": {
+      "message": "This absence request can neither be deleted nor cancelled."
     }
   }
 }

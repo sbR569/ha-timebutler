@@ -18,7 +18,7 @@ from homeassistant.core import (
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .actions import async_clock_action, async_stop
+from .actions import async_clock_action, async_delete_absence, async_request_absence, async_stop
 from .const import DOMAIN
 from .coordinator import TimebutlerConfigEntry
 
@@ -33,6 +33,28 @@ STOP_SCHEMA = BASE_SCHEMA.extend(
         vol.Optional("remarks"): cv.string,
         vol.Optional("break_regulation"): vol.In(["apply", "ignore"]),
     }
+)
+REQUEST_ABSENCE_SCHEMA = BASE_SCHEMA.extend(
+    {
+        vol.Required("type"): cv.string,
+        vol.Required("start_date"): cv.date,
+        vol.Optional("end_date"): cv.date,
+        vol.Optional("half_day"): vol.In(["morning", "afternoon"]),
+        vol.Optional("hours"): vol.Coerce(float),
+        vol.Optional("comments"): cv.string,
+        vol.Optional("substitute"): cv.string,
+    }
+)
+DELETE_ABSENCE_SCHEMA = vol.All(
+    BASE_SCHEMA.extend(
+        {
+            vol.Optional("id"): cv.string,
+            vol.Optional("date"): cv.date,
+            vol.Optional("reason"): cv.string,
+        }
+    ),
+    cv.has_at_least_one_key("id", "date"),
+    cv.has_at_most_one_key("id", "date"),
 )
 
 
@@ -85,4 +107,41 @@ def async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, "stop", handle_stop, schema=STOP_SCHEMA, supports_response=SupportsResponse.OPTIONAL
+    )
+
+    async def handle_request_absence(call: ServiceCall) -> ServiceResponse:
+        return await async_request_absence(
+            hass,
+            resolve_entry(hass, call),
+            absence_type=call.data["type"],
+            start=call.data["start_date"],
+            end=call.data.get("end_date"),
+            half_day=call.data.get("half_day"),
+            hours=call.data.get("hours"),
+            comments=call.data.get("comments"),
+            substitute=call.data.get("substitute"),
+        )
+
+    async def handle_delete_absence(call: ServiceCall) -> ServiceResponse:
+        return await async_delete_absence(
+            hass,
+            resolve_entry(hass, call),
+            absence_id=call.data.get("id"),
+            day=call.data.get("date"),
+            reason=call.data.get("reason"),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        "request_absence",
+        handle_request_absence,
+        schema=REQUEST_ABSENCE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "delete_absence",
+        handle_delete_absence,
+        schema=DELETE_ABSENCE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )

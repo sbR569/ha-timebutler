@@ -171,6 +171,66 @@
           "description": "Entscheidung, wenn die Sitzung die Pausenregelung verletzt."
         }
       }
+    },
+    "request_absence": {
+      "name": "Abwesenheit beantragen",
+      "description": "Stellt einen Abwesenheits- oder Urlaubsantrag.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        },
+        "type": {
+          "name": "Art",
+          "description": "Code der Abwesenheitsart (z. B. URL) oder Name (z. B. Urlaub)."
+        },
+        "start_date": {
+          "name": "Von",
+          "description": "Erster Tag der Abwesenheit."
+        },
+        "end_date": {
+          "name": "Bis",
+          "description": "Letzter Tag; ohne Angabe der erste Tag."
+        },
+        "half_day": {
+          "name": "Halbtags",
+          "description": "Vormittag oder Nachmittag eines einzelnen Tages."
+        },
+        "hours": {
+          "name": "Stunden",
+          "description": "Nur für die Überstunden-Arten UEB und AUA."
+        },
+        "comments": {
+          "name": "Kommentar",
+          "description": "Notiz für deine Vorgesetzten."
+        },
+        "substitute": {
+          "name": "Vertretung",
+          "description": "Name oder Mitarbeiter-ID deiner Vertretung."
+        }
+      }
+    },
+    "delete_absence": {
+      "name": "Abwesenheit löschen",
+      "description": "Löscht einen Abwesenheitsantrag oder beantragt seine Stornierung.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konto",
+          "description": "Timebutler-Konto; nur nötig, wenn mehrere eingerichtet sind."
+        },
+        "date": {
+          "name": "Datum",
+          "description": "Ein Tag der Abwesenheit (offen oder genehmigt)."
+        },
+        "id": {
+          "name": "ID",
+          "description": "ID des Antrags, statt des Datums."
+        },
+        "reason": {
+          "name": "Grund",
+          "description": "Grund für eine Stornoanfrage."
+        }
+      }
     }
   },
   "selector": {
@@ -178,6 +238,12 @@
       "options": {
         "apply": "Korrektur übernehmen",
         "ignore": "Unverändert speichern"
+      }
+    },
+    "half_day": {
+      "options": {
+        "morning": "Vormittag",
+        "afternoon": "Nachmittag"
       }
     }
   },
@@ -238,6 +304,51 @@
     },
     "break_regulation_confirmation": {
       "message": "Pausenregelung: {detail}. Nichts gespeichert, die Uhr läuft weiter – siehe Benachrichtigung."
+    },
+    "unknown_absence_type": {
+      "message": "Unbekannte Abwesenheitsart „{name}“. Verfügbar: {options}"
+    },
+    "unknown_substitute": {
+      "message": "Unbekannte Vertretung „{name}“. Verfügbar: {options}"
+    },
+    "end_before_start": {
+      "message": "Das Enddatum liegt vor dem Startdatum."
+    },
+    "half_day_single_day": {
+      "message": "Halbe Tage gehen nur für einen einzelnen Tag."
+    },
+    "hours_required": {
+      "message": "Überstunden-Arten (UEB, AUA) brauchen Stunden größer 0."
+    },
+    "overtime_single_day": {
+      "message": "Überstunden-Arten (UEB, AUA) gehen nur für einen einzelnen Tag."
+    },
+    "hours_not_allowed": {
+      "message": "Stunden sind nur bei den Überstunden-Arten UEB und AUA erlaubt."
+    },
+    "absence_invalid": {
+      "message": "Timebutler hat den Abwesenheitsantrag abgelehnt."
+    },
+    "absence_type_forbidden": {
+      "message": "Diese Abwesenheitsart darfst du nicht eintragen."
+    },
+    "absence_overlap": {
+      "message": "Überschneidet sich mit einer bestehenden Abwesenheit."
+    },
+    "absence_not_found": {
+      "message": "Keine offene oder genehmigte Abwesenheit am {date}."
+    },
+    "absence_ambiguous": {
+      "message": "Mehrere Abwesenheiten am {date}, bitte die ID angeben: {ids}"
+    },
+    "absence_unknown_id": {
+      "message": "Timebutler kennt keinen Abwesenheitsantrag mit dieser ID."
+    },
+    "absence_reason_required": {
+      "message": "Für die Stornierung ist ein Grund erforderlich."
+    },
+    "absence_delete_forbidden": {
+      "message": "Dieser Antrag kann weder gelöscht noch storniert werden."
     }
   }
 }
