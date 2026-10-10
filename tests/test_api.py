@@ -8,9 +8,11 @@ from custom_components.timebutler.api import (
     TimebutlerAuthError,
     TimebutlerClient,
     TimebutlerConnectionError,
+    TimebutlerRequestError,
     TimebutlerTimeTrackingDisabled,
 )
 from custom_components.timebutler.const import API_BASE, USER_AGENT
+from tests.common import load_fixture_json
 
 
 @pytest.fixture
@@ -73,3 +75,76 @@ async def test_400_on_time_tracking_endpoints_means_disabled(client, aioclient_m
 
     with pytest.raises(TimebutlerTimeTrackingDisabled):
         await getattr(client, method)()
+
+
+@pytest.mark.parametrize(
+    ("action", "path"),
+    [
+        ("start", "/time-clock/start"),
+        ("pause", "/time-clock/pause"),
+        ("resume", "/time-clock/resume"),
+        ("cancel", "/time-clock/cancel"),
+        ("business_trip_start", "/time-clock/business-trip-start"),
+        ("business_trip_end", "/time-clock/business-trip-end"),
+    ],
+)
+async def test_clock_actions_post_without_body(client, aioclient_mock, action, path):
+    aioclient_mock.post(f"{API_BASE}{path}", json={"status": "running"})
+
+    assert await client.clock(action) == {"status": "running"}
+
+    method, url, data, headers = aioclient_mock.mock_calls[0]
+    assert method.upper() == "POST"
+    assert str(url) == f"{API_BASE}{path}"
+    assert data is None
+    assert headers["Authorization"] == "Bearer tb_secret"
+
+
+async def test_stop_sends_body(client, aioclient_mock):
+    aioclient_mock.post(f"{API_BASE}/time-clock/stop", json={"outcome": "saved"})
+
+    assert await client.clock_stop({"projectId": 5, "remarks": "Review"}) == {"outcome": "saved"}
+
+    _, _, data, _ = aioclient_mock.mock_calls[0]
+    assert data == {"projectId": 5, "remarks": "Review"}
+
+
+async def test_stop_of_waiting_clock_returns_none(client, aioclient_mock):
+    aioclient_mock.post(f"{API_BASE}/time-clock/stop", status=204)
+
+    assert await client.clock_stop({}) is None
+
+
+@pytest.mark.parametrize("status", [400, 403, 404, 409, 422])
+async def test_write_errors_carry_status(client, aioclient_mock, status):
+    # 403 on a write means "not allowed here" (e.g. terminal only), not a bad token.
+    aioclient_mock.post(f"{API_BASE}/time-clock/pause", status=status)
+
+    with pytest.raises(TimebutlerRequestError) as err:
+        await client.clock("pause")
+
+    assert err.value.status == status
+    assert not isinstance(err.value, TimebutlerAuthError)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error"),
+    [
+        ({"status": 401}, TimebutlerAuthError),
+        ({"status": 500}, TimebutlerConnectionError),
+        ({"exc": aiohttp.ClientConnectionError()}, TimebutlerConnectionError),
+    ],
+)
+async def test_write_auth_and_connection_errors(client, aioclient_mock, kwargs, error):
+    aioclient_mock.post(f"{API_BASE}/time-clock/start", **kwargs)
+
+    with pytest.raises(error):
+        await client.clock("start")
+
+
+async def test_projects_and_categories(client, aioclient_mock):
+    aioclient_mock.get(f"{API_BASE}/projects", json=load_fixture_json("projects"))
+    aioclient_mock.get(f"{API_BASE}/categories", json=load_fixture_json("categories"))
+
+    assert (await client.get_projects())["defaultProjectId"] == "5"
+    assert (await client.get_categories())["categories"][1]["name"] == "Meeting"

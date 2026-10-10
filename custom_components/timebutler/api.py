@@ -9,13 +9,25 @@ import aiohttp
 
 from .const import API_BASE, REQUEST_TIMEOUT, USER_AGENT
 
+# Answers to write calls that mean "refused", each with its own user message.
+REFUSED_STATUSES = (400, 403, 404, 409, 422)
+
+CLOCK_PATHS = {
+    "start": "/time-clock/start",
+    "pause": "/time-clock/pause",
+    "resume": "/time-clock/resume",
+    "cancel": "/time-clock/cancel",
+    "business_trip_start": "/time-clock/business-trip-start",
+    "business_trip_end": "/time-clock/business-trip-end",
+}
+
 
 class TimebutlerError(Exception):
     """Base error of the Timebutler client."""
 
 
 class TimebutlerAuthError(TimebutlerError):
-    """The token was rejected (HTTP 401/403)."""
+    """The token was rejected (HTTP 401, or 403 on a read call)."""
 
 
 class TimebutlerConnectionError(TimebutlerError):
@@ -26,8 +38,16 @@ class TimebutlerTimeTrackingDisabled(TimebutlerError):
     """Time tracking is not active for the company (HTTP 400)."""
 
 
+class TimebutlerRequestError(TimebutlerError):
+    """A write call was refused; `status` tells why (400, 403, 404, 409, 422)."""
+
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
 class TimebutlerClient:
-    """Read-only access to the data of the token's own user."""
+    """Access to the data of the token's own user."""
 
     def __init__(
         self, session: aiohttp.ClientSession, token: str, base_url: str = API_BASE
@@ -40,6 +60,49 @@ class TimebutlerClient:
             "User-Agent": USER_AGENT,
         }
 
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        time_tracking: bool = False,
+        write: bool = False,
+    ) -> Any:
+        """Send one request and return the decoded JSON body (None on 204)."""
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                response = await self._session.request(
+                    method,
+                    f"{self._base_url}{path}",
+                    headers=self._headers,
+                    params=params,
+                    json=json,
+                )
+                try:
+                    status = response.status
+                    if status == 401 or (status == 403 and not write):
+                        raise TimebutlerAuthError(f"{path}: HTTP {status}")
+                    if write and status in REFUSED_STATUSES:
+                        text = await response.text()
+                        raise TimebutlerRequestError(
+                            status, f"{method} {path}: HTTP {status} {text[:300]}"
+                        )
+                    if status == 400 and time_tracking:
+                        raise TimebutlerTimeTrackingDisabled(path)
+                    if status >= 400:
+                        raise TimebutlerConnectionError(f"{path}: HTTP {status}")
+                    if status == 204:
+                        return None
+                    return await response.json(content_type=None)
+                finally:
+                    response.release()
+        except TimebutlerError:
+            raise
+        except (TimeoutError, aiohttp.ClientError, ValueError) as err:
+            raise TimebutlerConnectionError(f"{path}: {err!r}") from err
+
     async def _get(
         self,
         path: str,
@@ -48,25 +111,11 @@ class TimebutlerClient:
         time_tracking: bool = False,
     ) -> Any:
         """GET a path and return the decoded JSON body."""
-        try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
-                response = await self._session.get(
-                    f"{self._base_url}{path}", headers=self._headers, params=params
-                )
-                try:
-                    if response.status in (401, 403):
-                        raise TimebutlerAuthError(f"{path}: HTTP {response.status}")
-                    if response.status == 400 and time_tracking:
-                        raise TimebutlerTimeTrackingDisabled(path)
-                    if response.status >= 400:
-                        raise TimebutlerConnectionError(f"{path}: HTTP {response.status}")
-                    return await response.json(content_type=None)
-                finally:
-                    response.release()
-        except TimebutlerError:
-            raise
-        except (TimeoutError, aiohttp.ClientError, ValueError) as err:
-            raise TimebutlerConnectionError(f"{path}: {err!r}") from err
+        return await self._request("GET", path, params=params, time_tracking=time_tracking)
+
+    async def _write(self, method: str, path: str, json: dict[str, Any] | None = None) -> Any:
+        """POST/DELETE a path; refusals raise TimebutlerRequestError."""
+        return await self._request(method, path, json=json, write=True)
 
     async def get_profile(self) -> dict[str, Any]:
         """Profile of the token's user (id, name, ...)."""
@@ -95,3 +144,19 @@ class TimebutlerClient:
     async def get_time_entries(self, year: int, month: int) -> list[dict[str, Any]]:
         """Own time entries of one month (empty when time tracking is off)."""
         return await self._get("/time-entries/my", {"year": year, "month": month})
+
+    async def get_projects(self) -> dict[str, Any]:
+        """Active projects plus the user's default project."""
+        return await self._get("/projects")
+
+    async def get_categories(self) -> dict[str, Any]:
+        """Active categories plus the user's default category."""
+        return await self._get("/categories")
+
+    async def clock(self, action: str) -> dict[str, Any]:
+        """Run a time clock action (see CLOCK_PATHS) and return the new status."""
+        return await self._write("POST", CLOCK_PATHS[action])
+
+    async def clock_stop(self, body: dict[str, Any]) -> dict[str, Any] | None:
+        """Stop and save the clock; None when a waiting clock was discarded."""
+        return await self._write("POST", "/time-clock/stop", body)
