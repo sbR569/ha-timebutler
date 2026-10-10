@@ -8,8 +8,11 @@ from custom_components.timebutler.model import (
     ClockState,
     InputError,
     TodaySummary,
+    absence_body,
+    absence_type_code,
     assignment_id,
     break_regulation_message,
+    find_absence,
     match_item,
     month_minutes,
     months_needed,
@@ -154,6 +157,7 @@ def test_upcoming_filters_sorts_and_names():
 
     assert [a["von"] for a in result] == ["2026-10-26", "2026-11-20", "2026-12-21"]
     assert result[0] == {
+        "id": "3",
         "von": "2026-10-26",
         "bis": "2026-10-30",
         "art": "Urlaub",
@@ -292,3 +296,81 @@ def test_break_regulation_message_without_remedy_offers_discard():
     assert title == "Timebutler: break regulation"
     assert "break_regulation: apply" not in message
     assert "timebutler.cancel" in message
+
+
+def test_absence_type_by_code_or_name():
+    assert absence_type_code("url", TYPES) == "URL"
+    assert absence_type_code("Gleitzeit", TYPES) == "GLZ"
+
+
+def test_absence_type_unknown():
+    with pytest.raises(InputError) as err:
+        absence_type_code("Sabbatical", TYPES)
+
+    assert err.value.key == "unknown_absence_type"
+    assert err.value.placeholders == {"name": "Sabbatical", "options": "Urlaub, Gleitzeit"}
+
+
+def test_absence_body_full_days():
+    body = absence_body("URL", date(2026, 11, 9), date(2026, 11, 13), None, None, "Herbst")
+
+    assert body == {"absenceTypeId": "URL", "startDate": "2026-11-09", "endDate": "2026-11-13", "comments": "Herbst"}
+
+
+def test_absence_body_single_half_day_defaults_end():
+    body = absence_body("URL", date(2026, 11, 9), None, "afternoon", None, None)
+
+    assert body == {"absenceTypeId": "URL", "startDate": "2026-11-09", "endDate": "2026-11-09", "halfDay": "afternoon"}
+
+
+def test_absence_body_overtime_hours():
+    body = absence_body("UEB", date(2026, 11, 9), None, None, 1.5, None)
+
+    assert body["hours"] == "1.5"
+    assert absence_body("AUA", date(2026, 11, 9), None, None, 8.0, None)["hours"] == "8"
+
+
+@pytest.mark.parametrize(
+    ("args", "key"),
+    [
+        (("URL", date(2026, 11, 9), date(2026, 11, 8), None, None), "end_before_start"),
+        (("URL", date(2026, 11, 9), date(2026, 11, 10), "morning", None), "half_day_single_day"),
+        (("UEB", date(2026, 11, 9), None, None, None), "hours_required"),
+        (("UEB", date(2026, 11, 9), None, None, 0.0), "hours_required"),
+        (("AUA", date(2026, 11, 9), date(2026, 11, 10), None, 2.0), "overtime_single_day"),
+        (("URL", date(2026, 11, 9), None, None, 2.0), "hours_not_allowed"),
+    ],
+)
+def test_absence_body_rejects(args, key):
+    with pytest.raises(InputError) as err:
+        absence_body(*args, None)
+
+    assert err.value.key == key
+
+
+def test_find_absence_covering_the_day():
+    requests = load_fixture_json("absences")
+
+    assert find_absence(requests, date(2026, 10, 28)) == "3"
+    assert find_absence(requests, date(2026, 12, 21)) == "2"
+
+
+def test_find_absence_ignores_rejected():
+    with pytest.raises(InputError) as err:
+        find_absence(load_fixture_json("absences"), date(2026, 11, 3))
+
+    assert err.value.key == "absence_not_found"
+    assert err.value.placeholders == {"date": "2026-11-03"}
+
+
+def test_find_absence_ambiguous_half_days():
+    requests = [
+        {"id": "5", "startDate": "2026-11-20", "endDate": "2026-11-20", "status": "approved", "halfDay": "morning"},
+        {"id": "9", "startDate": "2026-11-20", "endDate": "2026-11-20", "status": "pending", "halfDay": "afternoon"},
+    ]
+
+    with pytest.raises(InputError) as err:
+        find_absence(requests, date(2026, 11, 20))
+
+    assert err.value.key == "absence_ambiguous"
+    assert err.value.placeholders == {"date": "2026-11-20", "ids": "5 (morning), 9 (afternoon)"}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -160,3 +161,16 @@ class TimebutlerClient:
     async def clock_stop(self, body: dict[str, Any]) -> dict[str, Any] | None:
         """Stop and save the clock; None when a waiting clock was discarded."""
         return await self._write("POST", "/time-clock/stop", body)
+
+    async def get_substitutes(self) -> list[dict[str, Any]]:
+        """Employees that may substitute the user."""
+        return await self._get("/substitute-employees")
+
+    async def create_absence(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Submit an absence request; returns it in its new state."""
+        return await self._write("POST", "/absence-requests", body)
+
+    async def delete_absence(self, absence_id: str, reason: str | None) -> dict[str, Any]:
+        """Delete an absence request, or ask for its cancellation."""
+        body = {"reason": reason} if reason else None
+        return await self._write("DELETE", f"/absence-requests/{quote(absence_id, safe='')}", body)

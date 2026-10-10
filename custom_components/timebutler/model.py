@@ -11,6 +11,7 @@ from typing import Any
 CLOCK_STATES = ("idle", "running", "paused", "waiting")
 CLOCKED_IN_STATES = ("running", "paused")
 UPCOMING_STATUSES = ("approved", "pending")
+OVERTIME_TYPES = ("UEB", "AUA")
 
 
 @dataclass(frozen=True)
@@ -189,6 +190,7 @@ def upcoming_absences(
     selected.sort(key=lambda request: (request["startDate"], request["endDate"]))
     return [
         {
+            "id": request.get("id"),
             "von": request["startDate"],
             "bis": request["endDate"],
             "art": types.get(request.get("type"), request.get("type") or ""),
@@ -271,3 +273,66 @@ def break_regulation_message(info: dict[str, Any], language: str) -> tuple[str, 
     if info.get("hasNoRemedy"):
         parts.append(text["discard"])
     return text["title"], "\n\n".join(parts)
+
+
+def absence_type_code(value: str, types: dict[str, str]) -> str:
+    """Absence type code from a code or a type name."""
+    items = [{"id": code, "name": name} for code, name in types.items()]
+    return match_item(value, items, "unknown_absence_type")
+
+
+def absence_body(
+    type_code: str,
+    start: date,
+    end: date | None,
+    half_day: str | None,
+    hours: float | None,
+    comments: str | None,
+) -> dict[str, Any]:
+    """Checked body of POST /absence-requests."""
+    end = end or start
+    if end < start:
+        raise InputError("end_before_start")
+    if half_day and end != start:
+        raise InputError("half_day_single_day")
+    if type_code in OVERTIME_TYPES:
+        if hours is None or hours <= 0:
+            raise InputError("hours_required")
+        if end != start:
+            raise InputError("overtime_single_day")
+    elif hours is not None:
+        raise InputError("hours_not_allowed")
+    body: dict[str, Any] = {
+        "absenceTypeId": type_code,
+        "startDate": start.isoformat(),
+        "endDate": end.isoformat(),
+    }
+    if half_day:
+        body["halfDay"] = half_day
+    if hours is not None:
+        body["hours"] = f"{hours:g}"
+    if comments:
+        body["comments"] = comments
+    return body
+
+
+def find_absence(requests: list[dict[str, Any]], day: date) -> str:
+    """ID of the pending or approved request covering day."""
+    key = day.isoformat()
+    matches = [
+        request
+        for request in requests
+        if request.get("status") in UPCOMING_STATUSES
+        and isinstance(request.get("startDate"), str)
+        and isinstance(request.get("endDate"), str)
+        and request["startDate"] <= key <= request["endDate"]
+    ]
+    if not matches:
+        raise InputError("absence_not_found", date=key)
+    if len(matches) > 1:
+        ids = ", ".join(
+            f"{request.get('id')} ({request['halfDay']})" if request.get("halfDay") else str(request.get("id"))
+            for request in matches
+        )
+        raise InputError("absence_ambiguous", date=key, ids=ids)
+    return str(matches[0].get("id"))

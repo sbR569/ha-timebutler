@@ -148,3 +148,38 @@ async def test_projects_and_categories(client, aioclient_mock):
 
     assert (await client.get_projects())["defaultProjectId"] == "5"
     assert (await client.get_categories())["categories"][1]["name"] == "Meeting"
+
+
+async def test_create_absence_posts_body(client, aioclient_mock):
+    aioclient_mock.post(f"{API_BASE}/absence-requests", json=load_fixture_json("absence_created"))
+    body = {"absenceTypeId": "URL", "startDate": "2026-11-09", "endDate": "2026-11-13"}
+
+    assert (await client.create_absence(body))["id"] == "6"
+
+    method, url, data, _ = aioclient_mock.mock_calls[0]
+    assert method.upper() == "POST"
+    assert data == body
+
+
+async def test_delete_absence_with_and_without_reason(client, aioclient_mock):
+    aioclient_mock.delete(f"{API_BASE}/absence-requests/3", json=load_fixture_json("delete_result"))
+
+    assert (await client.delete_absence("3", "Projekt verschoben"))["result"] == "cancellation_requested"
+    assert await client.delete_absence("3", None)
+
+    assert [call[2] for call in aioclient_mock.mock_calls] == [{"reason": "Projekt verschoben"}, None]
+
+
+async def test_delete_absence_quotes_the_id(client, aioclient_mock):
+    aioclient_mock.delete(f"{API_BASE}/absence-requests/1%2F2", json={"id": "1/2", "result": "deleted"})
+
+    await client.delete_absence("1/2", None)
+
+    _, url, _, _ = aioclient_mock.mock_calls[0]
+    assert url.raw_path.endswith("/absence-requests/1%2F2")
+
+
+async def test_substitutes(client, aioclient_mock):
+    aioclient_mock.get(f"{API_BASE}/substitute-employees", json=load_fixture_json("substitutes"))
+
+    assert [s["id"] for s in await client.get_substitutes()] == ["42", "43"]
