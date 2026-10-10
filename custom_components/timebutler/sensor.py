@@ -198,6 +198,8 @@ class TimebutlerSensor(TimebutlerEntity, SensorEntity):
     """A Timebutler value described by a TimebutlerSensorDescription."""
 
     _platform_domain = "sensor"
+    # Day maps change every minute while clocked in; keep them out of history.
+    _unrecorded_attributes = frozenset({"tage", "liste"})
     entity_description: TimebutlerSensorDescription
 
     def __init__(

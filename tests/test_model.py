@@ -205,3 +205,12 @@ def test_detection_after_midnight_uses_only_todays_part_of_the_session():
     summary = {"commitmentMinutes": 0, "workedMinutes": 150, "breakMinutes": 0}
 
     assert summary_includes_running(summary, clock, [], now) is True
+
+
+@pytest.mark.parametrize("worked", [237, 210])
+def test_detection_tolerates_a_lagging_or_deducted_summary(worked):
+    # Finished entries 60 + session 180; the summary is a few minutes behind
+    # or Timebutler already deducted a legal break from the running session.
+    summary = {**SUMMARY, "workedMinutes": worked}
+
+    assert summary_includes_running(summary, _clock(minutes=180), ENTRIES, NOW) is True

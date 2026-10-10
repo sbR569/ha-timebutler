@@ -81,7 +81,9 @@ def summary_includes_running(
     """Whether workedMinutes already counts the running session.
 
     Timebutler does not document this. While clocked in, the summary either
-    equals today's finished entries or those plus the running session.
+    equals today's finished entries or those plus the running session. The
+    midpoint between the two decides, so a lagging summary or a break that
+    Timebutler already deducted does not flip the result.
     """
     if clock is None or not clock.clocked_in:
         return False
@@ -89,7 +91,7 @@ def summary_includes_running(
     if session <= 2:
         return False
     finished = _entry_totals(entries).get(now.date().isoformat(), 0)
-    return _int(summary.get("workedMinutes")) >= finished + session - 2
+    return _int(summary.get("workedMinutes")) >= finished + session / 2
 
 
 def today_summary(

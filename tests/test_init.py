@@ -128,3 +128,14 @@ async def test_unload(hass, aioclient_mock, frozen_now):
     await hass.async_block_till_done()
 
     assert entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_bulky_attributes_are_not_recorded(hass, aioclient_mock, frozen_now):
+    # Week/month day maps change every minute while clocked in; keeping them
+    # out of the recorder avoids a new attributes row per minute.
+    await _setup(hass, aioclient_mock)
+    sensors = hass.data["entity_components"]["sensor"]
+
+    for entity_id in ("sensor.timebutler_arbeitszeit_woche", "sensor.timebutler_arbeitszeit_monat", "sensor.timebutler_naechste_abwesenheit"):
+        entity = sensors.get_entity(entity_id)
+        assert {"tage", "liste"} <= entity._unrecorded_attributes
