@@ -28,6 +28,16 @@
     }
   },
   "entity": {
+    "button": {
+      "start": {"name": "Start"},
+      "pause": {"name": "Pause"},
+      "fortsetzen": {"name": "Resume"},
+      "stopp": {"name": "Stop"},
+      "stopp_pausenkorrektur": {"name": "Stop with break correction"},
+      "verwerfen": {"name": "Discard"},
+      "dienstreise_start": {"name": "Business trip start"},
+      "dienstreise_ende": {"name": "Business trip end"}
+    },
     "binary_sensor": {
       "eingestempelt": {
         "name": "Clocked in"

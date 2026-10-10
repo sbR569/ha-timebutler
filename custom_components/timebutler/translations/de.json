@@ -28,6 +28,16 @@
     }
   },
   "entity": {
+    "button": {
+      "start": {"name": "Start"},
+      "pause": {"name": "Pause"},
+      "fortsetzen": {"name": "Fortsetzen"},
+      "stopp": {"name": "Stopp"},
+      "stopp_pausenkorrektur": {"name": "Stopp mit Pausenkorrektur"},
+      "verwerfen": {"name": "Verwerfen"},
+      "dienstreise_start": {"name": "Dienstreise Start"},
+      "dienstreise_ende": {"name": "Dienstreise Ende"}
+    },
     "binary_sensor": {
       "eingestempelt": {
         "name": "Eingestempelt"
