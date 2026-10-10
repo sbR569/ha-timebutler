@@ -18,13 +18,15 @@ from .api import (
     TimebutlerConnectionError,
     TimebutlerTimeTrackingDisabled,
 )
-from .const import (
-    BACKGROUND_INTERVAL,
-    DOMAIN,
-    LIVE_INTERVAL,
-    WORK_SUMMARY_INCLUDES_RUNNING,
+from .const import BACKGROUND_INTERVAL, DOMAIN, LIVE_INTERVAL
+from .model import (
+    ClockState,
+    TodaySummary,
+    months_needed,
+    parse_clock,
+    summary_includes_running,
+    today_summary,
 )
-from .model import ClockState, TodaySummary, months_needed, parse_clock, today_summary
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -125,9 +127,12 @@ class TimebutlerLiveCoordinator(DataUpdateCoordinator[LiveData]):
                 self._background.async_request_refresh(),
                 name=f"{DOMAIN} refresh after clock-out",
             )
+        now = dt_util.now()
+        entries = self._background.data.entries if self._background.data else []
+        includes_running = summary_includes_running(summary, clock, entries, now)
         return LiveData(
             clock=clock,
-            today=today_summary(summary, clock, WORK_SUMMARY_INCLUDES_RUNNING, dt_util.now()),
+            today=today_summary(summary, clock, includes_running, now),
         )
 
 

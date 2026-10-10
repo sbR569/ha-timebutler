@@ -1,8 +1,9 @@
 """Query the Timebutler API v2 with TIMEBUTLER_TOKEN and print what the integration uses.
 
-Run while clocked in for at least 5 minutes: the last lines say whether
-/time-tracking/work-summary already counts the running clock session
-(const.WORK_SUMMARY_INCLUDES_RUNNING). The token is never printed.
+Run while clocked in for at least 5 minutes to see whether
+/time-tracking/work-summary already counts the running clock session (the
+integration detects this at runtime, see model.summary_includes_running).
+The token is never printed.
 Output contains your own Timebutler data - do not commit or paste it publicly.
 """
 
@@ -73,7 +74,7 @@ def main() -> None:
     )
     if clock.get("status") in ("running", "paused") and session >= 5:
         includes = abs(worked - (done + session)) <= 2
-        print(f"=> WORK_SUMMARY_INCLUDES_RUNNING = {includes}")
+        print(f"=> work-summary includes the running session: {includes}")
     else:
         print("=> Clock in for at least 5 minutes and run again to decide.")
 

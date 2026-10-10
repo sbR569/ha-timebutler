@@ -10,6 +10,7 @@ from custom_components.timebutler.model import (
     month_minutes,
     months_needed,
     parse_clock,
+    summary_includes_running,
     today_summary,
     upcoming_absences,
     week_minutes,
@@ -182,3 +183,25 @@ def test_upcoming_respects_limit():
 
 def test_upcoming_empty():
     assert upcoming_absences([], TYPES, TODAY) == []
+
+
+def test_detects_summary_that_already_counts_the_session():
+    summary = {**SUMMARY, "workedMinutes": 240}
+
+    assert summary_includes_running(summary, _clock(minutes=180), ENTRIES, NOW) is True
+
+
+def test_detects_summary_without_the_session():
+    assert summary_includes_running(SUMMARY, _clock(minutes=180), ENTRIES, NOW) is False
+
+
+def test_detection_is_false_when_clocked_out():
+    assert summary_includes_running(SUMMARY, _clock(status="idle", started=None, minutes=0), ENTRIES, NOW) is False
+
+
+def test_detection_after_midnight_uses_only_todays_part_of_the_session():
+    now = datetime(2026, 10, 7, 2, 30, tzinfo=BERLIN)
+    clock = _clock(started=datetime(2026, 10, 6, 20, 0, tzinfo=UTC), minutes=270)
+    summary = {"commitmentMinutes": 0, "workedMinutes": 150, "breakMinutes": 0}
+
+    assert summary_includes_running(summary, clock, [], now) is True

@@ -1,6 +1,5 @@
 """Full setup: entities, availability, reauth, unload."""
 from datetime import timedelta
-from unittest.mock import patch
 
 import aiohttp
 import pytest
@@ -12,12 +11,6 @@ from custom_components.timebutler.const import DOMAIN
 from tests.common import mock_api
 
 pytestmark = pytest.mark.usefixtures("auto_enable_custom_integrations")
-
-
-@pytest.fixture(autouse=True)
-def _summary_excludes_running():
-    with patch("custom_components.timebutler.coordinator.WORK_SUMMARY_INCLUDES_RUNNING", False):
-        yield
 
 
 async def _setup(hass, aioclient_mock, overrides=None) -> MockConfigEntry:

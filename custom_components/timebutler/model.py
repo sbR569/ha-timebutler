@@ -63,6 +63,35 @@ def parse_clock(dto: dict[str, Any]) -> ClockState:
     )
 
 
+def _session_today(clock: ClockState, now: datetime) -> int:
+    """Minutes of the running session that fall on today."""
+    session = clock.session_minutes
+    if clock.started is not None and clock.started.astimezone(now.tzinfo).date() < now.date():
+        # Session started yesterday: only the part since midnight is today's.
+        session = min(session, now.hour * 60 + now.minute)
+    return session
+
+
+def summary_includes_running(
+    summary: dict[str, Any],
+    clock: ClockState | None,
+    entries: list[dict[str, Any]],
+    now: datetime,
+) -> bool:
+    """Whether workedMinutes already counts the running session.
+
+    Timebutler does not document this. While clocked in, the summary either
+    equals today's finished entries or those plus the running session.
+    """
+    if clock is None or not clock.clocked_in:
+        return False
+    session = _session_today(clock, now)
+    if session <= 2:
+        return False
+    finished = _entry_totals(entries).get(now.date().isoformat(), 0)
+    return _int(summary.get("workedMinutes")) >= finished + session - 2
+
+
 def today_summary(
     summary: dict[str, Any],
     clock: ClockState | None,
@@ -82,11 +111,7 @@ def today_summary(
             break_minutes=break_minutes,
         )
     if clock is not None and clock.clocked_in:
-        session = clock.session_minutes
-        if clock.started is not None and clock.started.astimezone(now.tzinfo).date() < now.date():
-            # Session started yesterday: only the part since midnight is today's.
-            session = min(session, now.hour * 60 + now.minute)
-        worked += session
+        worked += _session_today(clock, now)
         break_minutes += clock.session_break_minutes
     percent = math.floor(worked * 100 / commitment + 0.5) if commitment > 0 else 0
     return TodaySummary(

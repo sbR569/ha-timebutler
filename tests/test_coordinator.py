@@ -23,12 +23,6 @@ from tests.common import mock_api
 pytestmark = pytest.mark.usefixtures("auto_enable_custom_integrations")
 
 
-@pytest.fixture(autouse=True)
-def _summary_excludes_running():
-    with patch("custom_components.timebutler.coordinator.WORK_SUMMARY_INCLUDES_RUNNING", False):
-        yield
-
-
 @pytest.fixture
 def entry(hass):
     entry = MockConfigEntry(domain=DOMAIN, unique_id="4711", title="Max Mustermann", data={CONF_API_TOKEN: "tb_test"})
@@ -53,6 +47,17 @@ async def test_live_combines_clock_and_summary(aioclient_mock, coordinators, fro
     assert live.last_update_success
     assert live.data.clock.status == "running"
     assert live.data.today == TodaySummary(commitment=480, worked=240, remaining=240, percent=50, break_minutes=15)
+
+
+async def test_live_does_not_count_the_session_twice(aioclient_mock, coordinators, frozen_now):
+    live, background = coordinators
+    mock_api(aioclient_mock, {"/time-tracking/work-summary": {"json": {"commitmentMinutes": 480, "workedMinutes": 240, "remainingMinutes": 240, "percentDone": 50, "breakMinutes": 15}}})
+    await background.async_refresh()
+
+    await live.async_refresh()
+
+    assert live.data.today.worked == 240
+    assert live.data.today.percent == 50
 
 
 async def test_live_with_time_tracking_disabled(aioclient_mock, coordinators):

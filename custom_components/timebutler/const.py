@@ -13,8 +13,3 @@ REQUEST_TIMEOUT = 20
 LIVE_INTERVAL = timedelta(seconds=60)
 BACKGROUND_INTERVAL = timedelta(minutes=15)
 UPCOMING_LIMIT = 5
-
-# Whether /time-tracking/work-summary already counts the running clock session.
-# Not documented by Timebutler; determined with scripts/live_check.py while
-# clocked in (see the design doc). False: the session is added on top.
-WORK_SUMMARY_INCLUDES_RUNNING = False
