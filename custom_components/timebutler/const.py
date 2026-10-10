@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 DOMAIN = "timebutler"
-VERSION = "0.1.1"
+VERSION = "0.2.0"
 
 API_BASE = "https://app.timebutler.com/api/v2"
 # Timebutler drops TLS connections that carry curl's default User-Agent.

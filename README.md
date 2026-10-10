@@ -1,6 +1,6 @@
 # Timebutler for Home Assistant
 
-Custom integration that shows your own [Timebutler](https://timebutler.com) data in Home Assistant: time clock state, worked time today/this week/this month, vacation balance and upcoming absences. Read-only, uses the Timebutler API v2 with a personal access token.
+Custom integration that shows your own [Timebutler](https://timebutler.com) data in Home Assistant and lets you operate the time clock: clock state and controls, worked time today/this week/this month, vacation balance and upcoming absences. Uses the Timebutler API v2 with a personal access token.
 
 ## Installation (HACS)
 
@@ -28,6 +28,50 @@ When Timebutler rejects the token later, Home Assistant asks for a new one (reau
 | `sensor.timebutler_naechste_abwesenheit` | Start date of the next approved or pending absence; attributes `art`, `bis`, `tage`, `status`, `halbtags`, `liste` (next 5) |
 
 The clock and today's values refresh every minute, everything else every 15 minutes and right after you clock out.
+
+## Buttons
+
+| Entity | Action | Usable while |
+|---|---|---|
+| `button.timebutler_start` | Start the clock | off |
+| `button.timebutler_pause` | Pause | running |
+| `button.timebutler_fortsetzen` | Resume | paused |
+| `button.timebutler_stopp` | Stop and save | running, paused, waiting |
+| `button.timebutler_stopp_pausenkorrektur` | Stop and accept a break-regulation correction | running, paused |
+| `button.timebutler_verwerfen` | Discard the session (disabled by default) | not off |
+| `button.timebutler_dienstreise_start` / `_ende` | Business trip start/end (disabled by default) | running or paused |
+
+A button is *unavailable* while the clock state does not allow its action. [`dashboards/clock-buttons.yaml`](dashboards/clock-buttons.yaml) is a card that shows only the usable ones.
+
+## Services
+
+All services take an optional `config_entry_id`; it is only needed when several Timebutler accounts are set up. Errors (e.g. "terminal only", "clock already running") are shown as translated messages.
+
+| Service | Fields | Response |
+|---|---|---|
+| `timebutler.start`, `.pause`, `.resume`, `.cancel`, `.business_trip_start`, `.business_trip_end` | – | – |
+| `timebutler.stop` | `project`, `category` (name or ID; default: your Timebutler defaults), `remarks`, `break_regulation` (`apply`/`ignore`) | `outcome`, `id`, `gearbeitet`, `pause` |
+
+### Break regulation
+
+When a stop violates your company's break regulation, Timebutler does not save the entry. The integration then keeps the clock running, shows the required change as an error and as a persistent notification, and fires the event `timebutler_break_regulation` (`detail`, `obligatory`, `has_no_remedy`, `correction_work_minutes`, `correction_break_minutes`, `resulting_work_minutes`, `resulting_break_minutes`). Finish with *Stop with break correction* or `timebutler.stop` with `break_regulation: apply` (`ignore` saves unchanged and is refused for obligatory regulations).
+
+### Example: clock out when leaving home
+
+```yaml
+automation:
+  - alias: Ausstempeln beim Verlassen
+    triggers:
+      - trigger: state
+        entity_id: person.me
+        from: home
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.timebutler_eingestempelt
+        state: "on"
+    actions:
+      - action: timebutler.stop
+```
 
 ## Development
 

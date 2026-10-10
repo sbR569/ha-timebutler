@@ -1,0 +1,64 @@
+# Time clock buttons for the touch panel. Each button shows only while the
+# clock state allows its action (unavailable buttons are hidden).
+type: horizontal-stack
+cards:
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: button.timebutler_start
+        state_not: unavailable
+    card:
+      type: button
+      entity: button.timebutler_start
+      name: Start
+      icon: mdi:play
+      tap_action:
+        action: perform-action
+        perform_action: button.press
+        target:
+          entity_id: button.timebutler_start
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: button.timebutler_pause
+        state_not: unavailable
+    card:
+      type: button
+      entity: button.timebutler_pause
+      name: Pause
+      icon: mdi:pause
+      tap_action:
+        action: perform-action
+        perform_action: button.press
+        target:
+          entity_id: button.timebutler_pause
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: button.timebutler_fortsetzen
+        state_not: unavailable
+    card:
+      type: button
+      entity: button.timebutler_fortsetzen
+      name: Fortsetzen
+      icon: mdi:play-pause
+      tap_action:
+        action: perform-action
+        perform_action: button.press
+        target:
+          entity_id: button.timebutler_fortsetzen
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: button.timebutler_stopp
+        state_not: unavailable
+    card:
+      type: button
+      entity: button.timebutler_stopp
+      name: Stopp
+      icon: mdi:stop
+      tap_action:
+        action: perform-action
+        perform_action: button.press
+        target:
+          entity_id: button.timebutler_stopp
