@@ -4,12 +4,16 @@
       "user": {
         "title": "Timebutler",
         "description": "Create a personal access token (starts with tb_) in Timebutler and paste it here.",
-        "data": {"api_token": "Personal access token"}
+        "data": {
+          "api_token": "Personal access token"
+        }
       },
       "reauth_confirm": {
         "title": "Timebutler",
         "description": "Timebutler rejected the stored token. Enter a new personal access token of the same account.",
-        "data": {"api_token": "Personal access token"}
+        "data": {
+          "api_token": "Personal access token"
+        }
       }
     },
     "error": {
@@ -21,6 +25,54 @@
       "already_configured": "This Timebutler account is already set up.",
       "reauth_successful": "The token was updated.",
       "wrong_account": "The token belongs to a different Timebutler account."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "eingestempelt": {
+        "name": "Clocked in"
+      }
+    },
+    "sensor": {
+      "stempeluhr": {
+        "name": "Time clock",
+        "state": {
+          "idle": "Off",
+          "running": "Running",
+          "paused": "Paused",
+          "waiting": "Waiting"
+        }
+      },
+      "arbeitszeit_heute": {
+        "name": "Worked today"
+      },
+      "soll_heute": {
+        "name": "Target today"
+      },
+      "rest_heute": {
+        "name": "Remaining today"
+      },
+      "fortschritt_heute": {
+        "name": "Progress today"
+      },
+      "pause_heute": {
+        "name": "Break today"
+      },
+      "arbeitszeit_woche": {
+        "name": "Worked this week"
+      },
+      "arbeitszeit_monat": {
+        "name": "Worked this month"
+      },
+      "urlaub_rest": {
+        "name": "Vacation days left"
+      },
+      "krankheitstage": {
+        "name": "Sick days"
+      },
+      "naechste_abwesenheit": {
+        "name": "Next absence"
+      }
     }
   }
 }

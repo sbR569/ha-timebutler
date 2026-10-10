@@ -4,12 +4,16 @@
       "user": {
         "title": "Timebutler",
         "description": "Lege in Timebutler einen persönlichen Zugriffstoken an (beginnt mit tb_) und füge ihn hier ein.",
-        "data": {"api_token": "Persönlicher Zugriffstoken"}
+        "data": {
+          "api_token": "Persönlicher Zugriffstoken"
+        }
       },
       "reauth_confirm": {
         "title": "Timebutler",
         "description": "Timebutler hat den gespeicherten Token abgelehnt. Gib einen neuen persönlichen Zugriffstoken desselben Kontos ein.",
-        "data": {"api_token": "Persönlicher Zugriffstoken"}
+        "data": {
+          "api_token": "Persönlicher Zugriffstoken"
+        }
       }
     },
     "error": {
@@ -21,6 +25,54 @@
       "already_configured": "Dieses Timebutler-Konto ist bereits eingerichtet.",
       "reauth_successful": "Der Token wurde aktualisiert.",
       "wrong_account": "Der Token gehört zu einem anderen Timebutler-Konto."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "eingestempelt": {
+        "name": "Eingestempelt"
+      }
+    },
+    "sensor": {
+      "stempeluhr": {
+        "name": "Stempeluhr",
+        "state": {
+          "idle": "Aus",
+          "running": "Läuft",
+          "paused": "Pause",
+          "waiting": "Wartet"
+        }
+      },
+      "arbeitszeit_heute": {
+        "name": "Arbeitszeit heute"
+      },
+      "soll_heute": {
+        "name": "Soll heute"
+      },
+      "rest_heute": {
+        "name": "Rest heute"
+      },
+      "fortschritt_heute": {
+        "name": "Fortschritt heute"
+      },
+      "pause_heute": {
+        "name": "Pause heute"
+      },
+      "arbeitszeit_woche": {
+        "name": "Arbeitszeit Woche"
+      },
+      "arbeitszeit_monat": {
+        "name": "Arbeitszeit Monat"
+      },
+      "urlaub_rest": {
+        "name": "Urlaub Rest"
+      },
+      "krankheitstage": {
+        "name": "Krankheitstage"
+      },
+      "naechste_abwesenheit": {
+        "name": "Nächste Abwesenheit"
+      }
     }
   }
 }
