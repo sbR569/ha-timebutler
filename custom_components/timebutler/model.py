@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 from typing import Any
 
@@ -335,4 +335,46 @@ def find_absence(requests: list[dict[str, Any]], day: date) -> str:
             for request in matches
         )
         raise InputError("absence_ambiguous", date=key, ids=ids)
+    return str(matches[0].get("id"))
+
+
+def local_timestamp_ms(day: date, at: time, tz: tzinfo) -> int:
+    """Unix milliseconds of a local wall-clock time."""
+    return round(datetime.combine(day, at, tzinfo=tz).timestamp() * 1000)
+
+
+def time_entry_body(
+    day: date, start: time, end: time, break_minutes: int, remarks: str | None, tz: tzinfo
+) -> dict[str, Any]:
+    """Checked body of POST /time-tracking/clock-entry (without project/category)."""
+    if end <= start:
+        raise InputError("end_not_after_start")
+    start_ms = local_timestamp_ms(day, start, tz)
+    end_ms = local_timestamp_ms(day, end, tz)
+    # Real duration, so a DST change on that day counts correctly.
+    duration = (end_ms - start_ms) // 60_000
+    if break_minutes < 0 or break_minutes >= duration:
+        raise InputError("break_too_long", minutes=str(duration))
+    body: dict[str, Any] = {
+        "startTimestamp": start_ms,
+        "endTimestamp": end_ms,
+        "pauseSeconds": break_minutes * 60,
+    }
+    if remarks:
+        body["remarks"] = remarks
+    return body
+
+
+def find_time_entry(entries: list[dict[str, Any]], day: date, start: time | None) -> str:
+    """ID of the time entry on day (starting at start, when given)."""
+    key = day.isoformat()
+    matches = [entry for entry in entries if entry.get("date") == key]
+    if start is not None:
+        wanted = start.strftime("%H:%M")
+        matches = [entry for entry in matches if entry.get("startTime") == wanted]
+    if not matches:
+        raise InputError("time_entry_not_found", date=key)
+    if len(matches) > 1:
+        times = ", ".join(sorted(str(entry.get("startTime") or "-") for entry in matches))
+        raise InputError("time_entry_ambiguous", date=key, times=times)
     return str(matches[0].get("id"))

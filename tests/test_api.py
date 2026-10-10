@@ -183,3 +183,31 @@ async def test_substitutes(client, aioclient_mock):
     aioclient_mock.get(f"{API_BASE}/substitute-employees", json=load_fixture_json("substitutes"))
 
     assert [s["id"] for s in await client.get_substitutes()] == ["42", "43"]
+
+
+async def test_add_clock_entry_posts_body(client, aioclient_mock):
+    aioclient_mock.post(f"{API_BASE}/time-tracking/clock-entry", json=load_fixture_json("clock_entry"))
+    body = {"startTimestamp": 1, "endTimestamp": 2, "pauseSeconds": 0}
+
+    assert (await client.add_clock_entry(body))["id"] == "10"
+
+    _, _, data, _ = aioclient_mock.mock_calls[0]
+    assert data == body
+
+
+async def test_delete_time_entry(client, aioclient_mock):
+    aioclient_mock.delete(f"{API_BASE}/time-entries/9", json={"id": "9", "result": "deleted"})
+
+    assert await client.delete_time_entry("9") == {"id": "9", "result": "deleted"}
+
+    _, _, data, _ = aioclient_mock.mock_calls[0]
+    assert data is None
+
+
+async def test_delete_time_entry_quotes_the_id(client, aioclient_mock):
+    aioclient_mock.delete(f"{API_BASE}/time-entries/..%2Fx", json={"id": "x", "result": "deleted"})
+
+    await client.delete_time_entry("../x")
+
+    _, url, _, _ = aioclient_mock.mock_calls[0]
+    assert url.raw_path.endswith("/time-entries/..%2Fx")

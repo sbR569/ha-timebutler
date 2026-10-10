@@ -1,5 +1,5 @@
 """Pure data shaping in model.py."""
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -13,11 +13,14 @@ from custom_components.timebutler.model import (
     assignment_id,
     break_regulation_message,
     find_absence,
+    find_time_entry,
+    local_timestamp_ms,
     match_item,
     month_minutes,
     months_needed,
     parse_clock,
     stop_result,
+    time_entry_body,
     summary_includes_running,
     today_summary,
     upcoming_absences,
@@ -374,3 +377,64 @@ def test_find_absence_ambiguous_half_days():
 
     assert err.value.key == "absence_ambiguous"
     assert err.value.placeholders == {"date": "2026-11-20", "ids": "5 (morning), 9 (afternoon)"}
+
+
+def test_local_timestamp_ms():
+    assert local_timestamp_ms(date(2026, 10, 7), time(8, 0), BERLIN) == 1791352800000
+
+
+def test_time_entry_body():
+    body = time_entry_body(date(2026, 10, 7), time(8, 0), time(16, 30), 30, "Nachtrag", BERLIN)
+
+    assert body == {
+        "startTimestamp": 1791352800000,
+        "endTimestamp": 1791383400000,
+        "pauseSeconds": 1800,
+        "remarks": "Nachtrag",
+    }
+
+
+def test_time_entry_body_on_dst_change_day():
+    # 2026-10-25: clocks go back 03:00 -> 02:00, so 01:00-05:00 lasts 5 hours.
+    body = time_entry_body(date(2026, 10, 25), time(1, 0), time(5, 0), 260, None, BERLIN)
+
+    assert body["endTimestamp"] - body["startTimestamp"] == 300 * 60_000
+    with pytest.raises(InputError) as err:
+        time_entry_body(date(2026, 10, 25), time(1, 0), time(5, 0), 300, None, BERLIN)
+    assert err.value.placeholders == {"minutes": "300"}
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "break_minutes", "key"),
+    [
+        (time(16, 30), time(8, 0), 0, "end_not_after_start"),
+        (time(8, 0), time(8, 0), 0, "end_not_after_start"),
+        (time(8, 0), time(16, 30), 510, "break_too_long"),
+    ],
+)
+def test_time_entry_body_rejects(start, end, break_minutes, key):
+    with pytest.raises(InputError) as err:
+        time_entry_body(date(2026, 10, 7), start, end, break_minutes, None, BERLIN)
+
+    assert err.value.key == key
+
+
+def test_find_time_entry():
+    assert find_time_entry(ENTRIES, date(2026, 10, 7), None) == "9"
+    assert find_time_entry(ENTRIES, date(2026, 10, 6), time(18, 0)) == "8"
+
+
+def test_find_time_entry_ambiguous():
+    with pytest.raises(InputError) as err:
+        find_time_entry(ENTRIES, date(2026, 10, 6), None)
+
+    assert err.value.key == "time_entry_ambiguous"
+    assert err.value.placeholders == {"date": "2026-10-06", "times": "08:00, 18:00"}
+
+
+def test_find_time_entry_missing():
+    with pytest.raises(InputError) as err:
+        find_time_entry(ENTRIES, date(2026, 10, 7), time(9, 0))
+
+    assert err.value.key == "time_entry_not_found"
+    assert err.value.placeholders == {"date": "2026-10-07"}

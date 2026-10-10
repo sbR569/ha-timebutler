@@ -174,3 +174,11 @@ class TimebutlerClient:
         """Delete an absence request, or ask for its cancellation."""
         body = {"reason": reason} if reason else None
         return await self._write("DELETE", f"/absence-requests/{quote(absence_id, safe='')}", body)
+
+    async def add_clock_entry(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a completed time entry from start/end timestamps."""
+        return await self._write("POST", "/time-tracking/clock-entry", body)
+
+    async def delete_time_entry(self, entry_id: str) -> dict[str, Any]:
+        """Delete a time entry, or ask for its deletion."""
+        return await self._write("DELETE", f"/time-entries/{quote(entry_id, safe='')}")
