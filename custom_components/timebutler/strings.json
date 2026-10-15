@@ -27,6 +27,25 @@
       "wrong_account": "The token belongs to a different Timebutler account."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Overtime balance",
+        "description": "Enter your working-time account balance as the Timebutler web app shows it, and the day it is valid for (end of that day). From the next day on, the integration adds worked minus target time for every finished day. Best use yesterday's balance: days before Home Assistant first saw the daily target are estimated.",
+        "data": {
+          "balance": "Balance",
+          "as_of": "Valid at the end of"
+        },
+        "data_description": {
+          "balance": "Hours:minutes or decimal hours, e.g. +12:30, -1:45 or 12,5"
+        }
+      }
+    },
+    "error": {
+      "invalid_balance": "Enter the balance as +H:MM, -H:MM or decimal hours (12,5).",
+      "as_of_not_past": "The date must be before today."
+    }
+  },
   "entity": {
     "button": {
       "start": {"name": "Start"},

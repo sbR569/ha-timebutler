@@ -27,6 +27,25 @@
       "wrong_account": "Der Token gehört zu einem anderen Timebutler-Konto."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Überstunden-Saldo",
+        "description": "Trag den Stand deines Arbeitszeitkontos so ein, wie ihn die Timebutler-Weboberfläche zeigt, und den Tag, für dessen Ende er gilt. Ab dem Folgetag rechnet die Integration für jeden abgeschlossenen Tag Ist minus Soll dazu. Am besten den Stand von gestern nehmen: Tage, bevor Home Assistant das Tages-Soll zum ersten Mal gesehen hat, werden geschätzt.",
+        "data": {
+          "balance": "Kontostand",
+          "as_of": "Stand am Ende von"
+        },
+        "data_description": {
+          "balance": "Stunden:Minuten oder Dezimalstunden, z. B. +12:30, -1:45 oder 12,5"
+        }
+      }
+    },
+    "error": {
+      "invalid_balance": "Kontostand als +H:MM, -H:MM oder Dezimalstunden (12,5) eingeben.",
+      "as_of_not_past": "Das Datum muss vor heute liegen."
+    }
+  },
   "entity": {
     "button": {
       "start": {"name": "Start"},
