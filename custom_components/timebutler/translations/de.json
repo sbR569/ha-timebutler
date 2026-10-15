@@ -101,6 +101,9 @@
       },
       "naechste_abwesenheit": {
         "name": "Nächste Abwesenheit"
+      },
+      "ueberstunden": {
+        "name": "Überstunden"
       }
     }
   },

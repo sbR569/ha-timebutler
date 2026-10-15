@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE, UnitOfTime
 from homeassistant.core import HomeAssistant
@@ -129,6 +130,32 @@ def _next_absence_attrs(rt: TimebutlerRuntime) -> dict[str, Any]:
     return {**first, "liste": upcoming}
 
 
+def _overtime(rt: TimebutlerRuntime) -> tuple[int, list[str]] | None:
+    background = rt.background.data
+    if background is None:
+        return None
+    return rt.ledger.balance(dt_util.now().date(), background.entries, background.absences)
+
+
+def _overtime_value(rt: TimebutlerRuntime) -> int | None:
+    result = _overtime(rt)
+    return result[0] if result else None
+
+
+def _overtime_attrs(rt: TimebutlerRuntime) -> dict[str, Any] | None:
+    result = _overtime(rt)
+    if result is None or rt.background.data is None or rt.ledger.as_of is None:
+        return None
+    balance, estimated = result
+    today = _today(rt)
+    with_today = None
+    if today is not None:
+        with_today = balance + rt.ledger.today_difference(
+            dt_util.now().date(), today.worked, today.commitment, rt.background.data.absences
+        )
+    return {"mit_heute": with_today, "stand_vom": rt.ledger.as_of.isoformat(), "geschaetzt": estimated}
+
+
 @dataclass(frozen=True, kw_only=True)
 class TimebutlerSensorDescription(SensorEntityDescription):
     """Sensor description with its data sources and value functions."""
@@ -191,6 +218,16 @@ SENSORS: tuple[TimebutlerSensorDescription, ...] = (
         value_fn=_next_absence,
         attrs_fn=_next_absence_attrs,
     ),
+    TimebutlerSensorDescription(
+        key="ueberstunden",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        sources=("background", "live"),
+        value_fn=_overtime_value,
+        attrs_fn=_overtime_attrs,
+    ),
 )
 
 
@@ -198,8 +235,9 @@ class TimebutlerSensor(TimebutlerEntity, SensorEntity):
     """A Timebutler value described by a TimebutlerSensorDescription."""
 
     _platform_domain = "sensor"
-    # Day maps change every minute while clocked in; keep them out of history.
-    _unrecorded_attributes = frozenset({"tage", "liste"})
+    # Day maps and today's live balance change every minute while clocked in;
+    # keep them out of history.
+    _unrecorded_attributes = frozenset({"tage", "liste", "mit_heute", "geschaetzt"})
     entity_description: TimebutlerSensorDescription
 
     def __init__(

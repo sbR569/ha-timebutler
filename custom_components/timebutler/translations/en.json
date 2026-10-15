@@ -101,6 +101,9 @@
       },
       "naechste_abwesenheit": {
         "name": "Next absence"
+      },
+      "ueberstunden": {
+        "name": "Overtime"
       }
     }
   },

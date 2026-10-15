@@ -1,6 +1,6 @@
 # Timebutler for Home Assistant
 
-Custom integration that shows your own [Timebutler](https://timebutler.com) data in Home Assistant and lets you act on it: time clock state and controls, worked time today/this week/this month, vacation balance and upcoming absences, plus services to request or delete absences and to add or delete time entries. Uses the Timebutler API v2 with a personal access token.
+Custom integration that shows your own [Timebutler](https://timebutler.com) data in Home Assistant and lets you act on it: time clock state and controls, worked time today/this week/this month, vacation balance and upcoming absences, an overtime balance kept from a start value you enter, plus services to request or delete absences and to add or delete time entries. Uses the Timebutler API v2 with a personal access token.
 
 ## Installation (HACS)
 
@@ -26,6 +26,7 @@ When Timebutler rejects the token later, Home Assistant asks for a new one (reau
 | `sensor.timebutler_urlaub_rest` | Vacation days left; attributes `gesamt`, `genehmigt`, `beantragt` |
 | `sensor.timebutler_krankheitstage` | Sick days this year |
 | `sensor.timebutler_naechste_abwesenheit` | Start date of the next approved or pending absence; attributes `id`, `art`, `bis`, `tage`, `status`, `halbtags`, `liste` (next 5, each with `id`) |
+| `sensor.timebutler_ueberstunden` | Overtime balance in minutes up to the end of yesterday (negative = minus hours); unknown until a start value is set. Attributes `mit_heute` (balance if you stopped now), `stand_vom` (start date), `geschaetzt` (days whose target was estimated) |
 
 The clock and today's values refresh every minute, everything else every 15 minutes and right after you clock out.
 
@@ -93,6 +94,16 @@ automation:
         data:
           message: "Timebutler: {{ trigger.event.data.detail }}"
 ```
+
+## Overtime balance
+
+Timebutler's API has no endpoint for the working-time account, so the integration keeps the balance itself:
+
+1. In Home Assistant open Settings → Devices & services → Timebutler → Configure. Enter the balance the Timebutler web app shows (`+12:30`, `-1:45` or `12,5` hours) and the day it is valid for (default: yesterday).
+2. From the next day on, every finished day adds worked minus target time. The target is the one Timebutler reported for that day (recorded every minute while Home Assistant runs), so public holidays and part-time days come from Timebutler.
+3. Approved absences: a full day counts as neutral, a half day halves the target, `AUA` (overtime reduction) keeps the full target, `UEB` (overtime worked) adds its hours. Pending and rejected requests are ignored.
+
+Limits: a day Home Assistant was down for entirely uses the target of the last same weekday (listed in `geschaetzt`; a public holiday on such a day counts as a working day). Corrections in Timebutler older than the previous month are not picked up. When the value drifts from the web app, enter the current balance again in the options.
 
 ## Development
 
