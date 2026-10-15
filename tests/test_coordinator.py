@@ -1,4 +1,5 @@
 """Coordinators: data assembly, error handling, refresh after clock-out."""
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import aiohttp
@@ -18,6 +19,7 @@ from custom_components.timebutler.coordinator import (
     TimebutlerLiveCoordinator,
 )
 from custom_components.timebutler.model import TodaySummary
+from custom_components.timebutler.overtime import OvertimeLedger
 from tests.common import mock_api
 
 pytestmark = pytest.mark.usefixtures("auto_enable_custom_integrations")
@@ -31,9 +33,16 @@ def entry(hass):
 
 
 @pytest.fixture
-def coordinators(hass, aioclient_mock, entry):
+async def ledger(hass, entry):
+    ledger = OvertimeLedger(hass, entry.entry_id, None, None)
+    await ledger.async_load()
+    return ledger
+
+
+@pytest.fixture
+def coordinators(hass, aioclient_mock, entry, ledger):
     client = TimebutlerClient(async_get_clientsession(hass), "tb_test")
-    background = TimebutlerBackgroundCoordinator(hass, entry, client)
+    background = TimebutlerBackgroundCoordinator(hass, entry, client, ledger)
     live = TimebutlerLiveCoordinator(hass, entry, client, background)
     return live, background
 
@@ -155,3 +164,58 @@ async def test_no_background_refresh_while_clocked_in(hass, aioclient_mock, coor
         await hass.async_block_till_done()
 
     refresh.assert_not_awaited()
+
+
+def _requested_months(aioclient_mock) -> set[tuple[str, str]]:
+    return {
+        (url.query["year"], url.query["month"])
+        for _, url, _, _ in aioclient_mock.mock_calls
+        if url.path.endswith("/time-entries/my")
+    }
+
+
+async def test_live_records_todays_target(aioclient_mock, coordinators, ledger, frozen_now):
+    live, background = coordinators
+    mock_api(aioclient_mock)
+
+    await background.async_refresh()
+    await live.async_refresh()
+
+    assert ledger.targets == {"2026-10-07": 480}
+
+
+async def test_live_records_nothing_without_time_tracking(aioclient_mock, coordinators, ledger, frozen_now):
+    live, _ = coordinators
+    mock_api(aioclient_mock, {"/time-clock/status": {"status": 400}, "/time-tracking/work-summary": {"status": 400}})
+
+    await live.async_refresh()
+
+    assert ledger.targets == {}
+
+
+async def test_background_fetches_only_the_usual_months_without_start(aioclient_mock, coordinators, frozen_now):
+    _, background = coordinators
+    mock_api(aioclient_mock)
+
+    await background.async_refresh()
+
+    assert _requested_months(aioclient_mock) == {("2026", "10")}
+
+
+async def test_background_fetches_months_since_start_and_freezes(aioclient_mock, coordinators, ledger, frozen_now):
+    _, background = coordinators
+    ledger.balance_minutes = 0
+    ledger.as_of = date(2026, 8, 20)
+    mock_api(aioclient_mock)
+
+    await background.async_refresh()
+
+    assert background.last_update_success
+    assert _requested_months(aioclient_mock) == {("2026", "8"), ("2026", "9"), ("2026", "10")}
+    assert ledger.frozen_through == date(2026, 8, 31)
+
+    aioclient_mock.clear_requests()
+    mock_api(aioclient_mock)
+    await background.async_refresh()
+
+    assert _requested_months(aioclient_mock) == {("2026", "9"), ("2026", "10")}

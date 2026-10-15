@@ -141,3 +141,29 @@ async def test_bulky_attributes_are_not_recorded(hass, aioclient_mock, frozen_no
     for entity_id in ("sensor.timebutler_arbeitszeit_woche", "sensor.timebutler_arbeitszeit_monat", "sensor.timebutler_naechste_abwesenheit"):
         entity = sensors.get_entity(entity_id)
         assert {"tage", "liste"} <= entity._unrecorded_attributes
+
+
+async def test_options_change_reloads_the_entry(hass, aioclient_mock, frozen_now):
+    entry = await _setup(hass, aioclient_mock)
+    ledger = entry.runtime_data.ledger
+    assert not ledger.configured
+
+    hass.config_entries.async_update_entry(entry, options={"balance_minutes": 30, "as_of": "2026-10-06"})
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.ledger is not ledger
+    assert entry.runtime_data.ledger.balance_minutes == 30
+
+
+async def test_unload_saves_and_remove_deletes_the_ledger(hass, aioclient_mock, hass_storage, frozen_now):
+    entry = await _setup(hass, aioclient_mock)
+    key = f"timebutler.{entry.entry_id}.overtime"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass_storage[key]["data"]["targets"] == {"2026-10-07": 480}
+
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert key not in hass_storage
