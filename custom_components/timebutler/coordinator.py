@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 import logging
 from typing import Any
 
@@ -22,11 +23,13 @@ from .const import BACKGROUND_INTERVAL, DOMAIN, LIVE_INTERVAL
 from .model import (
     ClockState,
     TodaySummary,
+    months_between,
     months_needed,
     parse_clock,
     summary_includes_running,
     today_summary,
 )
+from .overtime import OvertimeLedger
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +57,9 @@ class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
 
     config_entry: ConfigEntry
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: TimebutlerClient) -> None:
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, client: TimebutlerClient, ledger: OvertimeLedger
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -63,6 +68,15 @@ class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
             update_interval=BACKGROUND_INTERVAL,
         )
         self.client = client
+        self.ledger = ledger
+
+    def _months(self, today: date) -> list[tuple[int, int]]:
+        """The week/month sensors' months plus every month the balance still counts."""
+        months = months_needed(today)
+        counted_from = self.ledger.counted_from()
+        if counted_from is not None:
+            months += [month for month in months_between(counted_from, today) if month not in months]
+        return months
 
     async def _async_update_data(self) -> BackgroundData:
         today = dt_util.now().date()
@@ -77,12 +91,13 @@ class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
                 for item in await self.client.get_absence_types()
             }
             entries: list[dict[str, Any]] = []
-            for year, month in months_needed(today):
+            for year, month in self._months(today):
                 entries.extend(await self.client.get_time_entries(year, month))
         except TimebutlerAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except TimebutlerConnectionError as err:
             raise UpdateFailed(str(err)) from err
+        self.ledger.freeze(today, entries, absences)
         return BackgroundData(time_off=time_off, absences=absences, absence_types=types, entries=entries)
 
 
@@ -130,18 +145,18 @@ class TimebutlerLiveCoordinator(DataUpdateCoordinator[LiveData]):
         now = dt_util.now()
         entries = self._background.data.entries if self._background.data else []
         includes_running = summary_includes_running(summary, clock, entries, now)
-        return LiveData(
-            clock=clock,
-            today=today_summary(summary, clock, includes_running, now),
-        )
+        today = today_summary(summary, clock, includes_running, now)
+        self._background.ledger.record_target(now.date(), today.commitment)
+        return LiveData(clock=clock, today=today)
 
 
 @dataclass
 class TimebutlerRuntime:
-    """Coordinators of one config entry."""
+    """Coordinators and overtime ledger of one config entry."""
 
     live: TimebutlerLiveCoordinator
     background: TimebutlerBackgroundCoordinator
+    ledger: OvertimeLedger
 
 
 type TimebutlerConfigEntry = ConfigEntry[TimebutlerRuntime]

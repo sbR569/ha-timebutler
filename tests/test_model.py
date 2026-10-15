@@ -6,18 +6,25 @@ import pytest
 
 from custom_components.timebutler.model import (
     ClockState,
+    DayAbsences,
     InputError,
     TodaySummary,
     absence_body,
     absence_type_code,
     assignment_id,
     break_regulation_message,
+    day_absences,
+    effective_target,
     find_absence,
     find_time_entry,
+    format_balance,
     local_timestamp_ms,
     match_item,
     month_minutes,
+    months_between,
     months_needed,
+    overtime_days,
+    parse_balance,
     parse_clock,
     stop_result,
     time_entry_body,
@@ -25,8 +32,9 @@ from custom_components.timebutler.model import (
     today_summary,
     upcoming_absences,
     week_minutes,
+    weekday_norm,
 )
-from tests.common import load_fixture_json
+from tests.common import absence_dto, entry_dto, load_fixture_json
 
 BERLIN = ZoneInfo("Europe/Berlin")
 NOW = datetime(2026, 10, 7, 10, 0, tzinfo=BERLIN)
@@ -438,3 +446,168 @@ def test_find_time_entry_missing():
 
     assert err.value.key == "time_entry_not_found"
     assert err.value.placeholders == {"date": "2026-10-07"}
+
+
+@pytest.mark.parametrize(
+    ("text", "minutes"),
+    [
+        ("+12:30", 750),
+        ("-1:45", -105),
+        ("12,5", 750),
+        ("12.5", 750),
+        ("-0:30", -30),
+        (" 3 ", 180),
+        ("0", 0),
+        ("+0:05", 5),
+        ("0,25", 15),
+    ],
+)
+def test_parse_balance(text, minutes):
+    assert parse_balance(text) == minutes
+
+
+@pytest.mark.parametrize("text", ["", "abc", "1:60", "1:5", "--1", "+-1:00", "1,2,3", "nan", "inf", "1h"])
+def test_parse_balance_rejects_garbage(text):
+    with pytest.raises(ValueError):
+        parse_balance(text)
+
+
+def test_format_balance():
+    assert format_balance(750) == "+12:30"
+    assert format_balance(-105) == "-1:45"
+    assert format_balance(0) == "+0:00"
+    assert format_balance(-5) == "-0:05"
+
+
+@pytest.mark.parametrize("minutes", [-1000, -1, 0, 59, 61, 6000])
+def test_format_balance_round_trips(minutes):
+    assert parse_balance(format_balance(minutes)) == minutes
+
+
+def test_day_absences_counts_only_approved_requests_covering_the_day():
+    requests = [
+        absence_dto("URL", "2026-10-05", "2026-10-09"),
+        absence_dto("URL", "2026-10-06", status="pending"),
+        absence_dto("URL", "2026-10-06", status="rejected"),
+    ]
+    assert day_absences(requests, date(2026, 10, 6)) == DayAbsences(fraction=1.0)
+    assert day_absences(requests, date(2026, 10, 10)) == DayAbsences()
+    assert not DayAbsences().any
+
+
+def test_day_absences_half_days_add_up_and_cap_at_one():
+    morning = absence_dto("URL", "2026-10-06", half_day="morning")
+    afternoon = absence_dto("GLZ", "2026-10-06", half_day="afternoon")
+    full = absence_dto("GLZ", "2026-10-06")
+    day = date(2026, 10, 6)
+    assert day_absences([morning], day).fraction == 0.5
+    assert day_absences([morning, afternoon], day).fraction == 1.0
+    assert day_absences([full, morning], day).fraction == 1.0
+
+
+def test_day_absences_overtime_types():
+    requests = [
+        absence_dto("UEB", "2026-10-06", hours=1.5),
+        absence_dto("UEB", "2026-10-06", hours="0.25"),
+        absence_dto("AUA", "2026-10-07", hours=8),
+    ]
+    assert day_absences(requests, date(2026, 10, 6)) == DayAbsences(gain_minutes=105)
+    assert day_absences(requests, date(2026, 10, 7)) == DayAbsences(reduction=True)
+    assert DayAbsences(gain_minutes=105).any
+    assert DayAbsences(reduction=True).any
+
+
+@pytest.mark.parametrize(
+    ("raw", "norm", "absences", "expected"),
+    [
+        (480, 480, DayAbsences(), 480),
+        (480, 480, DayAbsences(fraction=1.0), 0),
+        (0, 480, DayAbsences(fraction=1.0), 0),  # Timebutler already set 0
+        (480, 480, DayAbsences(fraction=0.5), 240),
+        (240, 480, DayAbsences(fraction=0.5), 240),  # Timebutler already halved
+        (480, None, DayAbsences(fraction=0.5), 240),  # no norm yet: half the raw target
+        (480, 480, DayAbsences(reduction=True), 480),
+        (0, 480, DayAbsences(reduction=True), 480),  # Timebutler lowered it: AUA still costs the day
+        (0, None, DayAbsences(reduction=True), 0),
+        (0, 480, DayAbsences(gain_minutes=60), 0),  # UEB does not change the target
+    ],
+)
+def test_effective_target(raw, norm, absences, expected):
+    assert effective_target(raw, norm, absences) == expected
+
+
+def test_weekday_norm_uses_latest_earlier_same_weekday_without_absence():
+    # Mondays 2026-09-28, 10-05, 10-12; Tuesday 10-13
+    targets = {"2026-09-28": 480, "2026-10-05": 360, "2026-10-12": 0, "2026-10-13": 480}
+    requests = [absence_dto("URL", "2026-10-12")]
+    assert weekday_norm(date(2026, 10, 19), targets, requests) == 360  # 10-12 had vacation
+    assert weekday_norm(date(2026, 10, 5), targets, requests) == 480  # only earlier days count
+    assert weekday_norm(date(2026, 9, 28), targets, requests) is None
+    assert weekday_norm(date(2026, 10, 20), targets, requests) == 480
+
+
+def test_overtime_days_sums_worked_minus_target():
+    entries = [
+        entry_dto("2026-10-05", 500),
+        entry_dto("2026-10-06", 400),
+        entry_dto("2026-10-06", 60, status="rejected"),
+        entry_dto("2026-10-07", 120),
+    ]
+    targets = {"2026-10-05": 480, "2026-10-06": 480, "2026-10-07": 480}
+    assert overtime_days(date(2026, 10, 5), date(2026, 10, 6), entries, [], targets) == (-60, [])
+
+
+def test_overtime_days_is_empty_when_first_is_after_last():
+    assert overtime_days(date(2026, 10, 7), date(2026, 10, 6), [], [], {}) == (0, [])
+
+
+def test_overtime_days_across_a_month_boundary():
+    entries = [entry_dto("2026-09-30", 500), entry_dto("2026-10-01", 470)]
+    targets = {"2026-09-30": 480, "2026-10-01": 480}
+    assert overtime_days(date(2026, 9, 30), date(2026, 10, 1), entries, [], targets) == (10, [])
+
+
+def test_overtime_days_marks_days_without_recorded_target():
+    entries = [entry_dto("2026-10-12", 480), entry_dto("2026-10-13", 300)]
+    targets = {"2026-10-05": 480, "2026-10-12": 480}  # Mondays known, Tuesday never seen
+    assert overtime_days(date(2026, 10, 12), date(2026, 10, 13), entries, [], targets) == (300, ["2026-10-13"])
+
+
+def test_overtime_days_estimates_from_weekday_norm():
+    entries = [entry_dto("2026-10-13", 300)]
+    targets = {"2026-10-06": 480}  # the Tuesday before
+    assert overtime_days(date(2026, 10, 13), date(2026, 10, 13), entries, [], targets) == (-180, ["2026-10-13"])
+
+
+def test_overtime_days_vacation_over_a_weekend_is_neutral():
+    targets = {f"2026-10-{day:02d}": (0 if day in (10, 11) else 480) for day in range(5, 13)}
+    requests = [absence_dto("URL", "2026-10-08", "2026-10-12")]  # Thursday to Monday
+    entries = [entry_dto("2026-10-05", 480), entry_dto("2026-10-06", 480), entry_dto("2026-10-07", 540)]
+    assert overtime_days(date(2026, 10, 5), date(2026, 10, 12), entries, requests, targets) == (60, [])
+
+
+def test_overtime_days_with_overtime_absences():
+    targets = {"2026-09-29": 480, "2026-10-06": 0, "2026-10-07": 480}
+    requests = [absence_dto("AUA", "2026-10-06", hours=8), absence_dto("UEB", "2026-10-07", hours=2)]
+    entries = [entry_dto("2026-10-07", 480)]
+    # 10-06: AUA keeps the Tuesday norm 480 -> -480; 10-07: 480 - 480 + 120 -> +120
+    assert overtime_days(date(2026, 10, 6), date(2026, 10, 7), entries, requests, targets) == (-360, [])
+
+
+def test_months_between():
+    assert months_between(date(2026, 11, 20), date(2027, 2, 1)) == [(2026, 11), (2026, 12), (2027, 1), (2027, 2)]
+    assert months_between(date(2026, 10, 5), date(2026, 10, 7)) == [(2026, 10)]
+    assert months_between(date(2026, 10, 8), date(2026, 10, 7)) == [(2026, 10)]
+
+
+def test_weekday_norm_skips_days_without_target():
+    # Fridays: 2026-12-18 a working day, 12-25 and 2027-01-01 public holidays with target 0
+    targets = {"2026-12-18": 480, "2026-12-25": 0, "2027-01-01": 0}
+    assert weekday_norm(date(2027, 1, 8), targets, []) == 480
+
+
+def test_half_day_after_holidays_uses_the_working_norm():
+    targets = {"2026-12-18": 480, "2026-12-25": 0, "2027-01-01": 0, "2027-01-08": 480}
+    requests = [absence_dto("URL", "2027-01-08", half_day="morning")]
+    entries = [entry_dto("2027-01-08", 240)]
+    assert overtime_days(date(2027, 1, 8), date(2027, 1, 8), entries, requests, targets) == (0, [])

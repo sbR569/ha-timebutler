@@ -65,3 +65,29 @@ async def setup_integration(hass, aioclient_mock, overrides=None) -> MockConfigE
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     return entry
+
+
+def entry_dto(day: str, minutes: int, status: str = "done") -> dict[str, Any]:
+    """A minimal time entry as /time-entries/my returns it."""
+    return {"id": f"{day}-{minutes}", "date": day, "workedMinutes": minutes, "status": status}
+
+
+def absence_dto(
+    kind: str,
+    start: str,
+    end: str | None = None,
+    *,
+    status: str = "approved",
+    half_day: str | None = None,
+    hours: float | str | None = None,
+) -> dict[str, Any]:
+    """A minimal absence request as /absence-requests/my returns it."""
+    return {
+        "id": f"{kind}-{start}",
+        "type": kind,
+        "startDate": start,
+        "endDate": end or start,
+        "status": status,
+        "halfDay": half_day,
+        "hours": hours,
+    }

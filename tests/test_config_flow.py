@@ -103,3 +103,63 @@ async def test_reauth_rejects_token_of_other_account(hass, aioclient_mock):
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "wrong_account"
     assert entry.data[CONF_API_TOKEN] == "tb_old"
+
+
+async def _options_entry(hass, options=None) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="4711", title="Max Mustermann", data={CONF_API_TOKEN: "tb_test"}, options=options or {}
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+def _suggested(result, key):
+    for field in result["data_schema"].schema:
+        if field == key:
+            return (field.description or {}).get("suggested_value")
+    raise AssertionError(f"no field {key}")
+
+
+async def test_options_flow_stores_balance(hass, frozen_now):
+    entry = await _options_entry(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    assert _suggested(result, "as_of") == "2026-10-06"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"balance": "+12:30", "as_of": "2026-10-06"}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options == {"balance_minutes": 750, "as_of": "2026-10-06"}
+
+
+async def test_options_flow_prefills_current_values(hass, frozen_now):
+    entry = await _options_entry(hass, {"balance_minutes": -105, "as_of": "2026-10-01"})
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert _suggested(result, "balance") == "-1:45"
+    assert _suggested(result, "as_of") == "2026-10-01"
+
+
+@pytest.mark.parametrize(
+    ("user_input", "errors"),
+    [
+        ({"balance": "zwölf", "as_of": "2026-10-06"}, {"balance": "invalid_balance"}),
+        ({"balance": "1:00", "as_of": "2026-10-07"}, {"as_of": "as_of_not_past"}),
+        ({"balance": "x", "as_of": "2026-10-08"}, {"balance": "invalid_balance", "as_of": "as_of_not_past"}),
+    ],
+)
+async def test_options_flow_rejects_bad_input(hass, frozen_now, user_input, errors):
+    entry = await _options_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], user_input)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == errors
+    assert _suggested(result, "balance") == user_input["balance"]
+    assert entry.options == {}
