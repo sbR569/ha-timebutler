@@ -6,6 +6,7 @@ import calendar
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
+import re
 from typing import Any
 
 CLOCK_STATES = ("idle", "running", "paused", "waiting")
@@ -169,6 +170,150 @@ def months_needed(today: date) -> list[tuple[int, int]]:
     if (monday.year, monday.month) != months[0]:
         months.append((monday.year, monday.month))
     return months
+
+
+OVERTIME_GAIN = "UEB"
+OVERTIME_REDUCTION = "AUA"
+
+_BALANCE_HM = re.compile(r"([+-]?)(\d+):([0-5]\d)")
+_BALANCE_HOURS = re.compile(r"([+-]?)(\d+(?:[.,]\d+)?)")
+
+
+def parse_balance(text: str) -> int:
+    """Minutes from '+12:30', '-1:45' or decimal hours '12,5' / '12.5'."""
+    value = text.strip().replace(" ", "")
+    if match := _BALANCE_HM.fullmatch(value):
+        sign, hours, minutes = match.groups()
+        total = int(hours) * 60 + int(minutes)
+    elif match := _BALANCE_HOURS.fullmatch(value):
+        sign, hours = match.groups()
+        total = round(float(hours.replace(",", ".")) * 60)
+    else:
+        raise ValueError(f"not a balance: {text!r}")
+    return -total if sign == "-" else total
+
+
+def format_balance(minutes: int) -> str:
+    """'+H:MM' or '-H:MM'."""
+    hours, rest = divmod(abs(minutes), 60)
+    return f"{'-' if minutes < 0 else '+'}{hours}:{rest:02d}"
+
+
+@dataclass(frozen=True)
+class DayAbsences:
+    """Approved absences on one day, as far as the overtime balance cares."""
+
+    fraction: float = 0.0  # ordinary absences: 1 per full day, 0.5 per half day, capped at 1
+    reduction: bool = False  # AUA (overtime reduction) on this day
+    gain_minutes: int = 0  # UEB (overtime worked) hours, in minutes
+
+    @property
+    def any(self) -> bool:
+        """Whether any absence touches the day."""
+        return self.fraction > 0 or self.reduction or self.gain_minutes > 0
+
+
+def _float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def day_absences(requests: list[dict[str, Any]], day: date) -> DayAbsences:
+    """Combine the approved requests covering day."""
+    key = day.isoformat()
+    fraction = 0.0
+    reduction = False
+    gain_hours = 0.0
+    for request in requests:
+        start, end = request.get("startDate"), request.get("endDate")
+        if (
+            request.get("status") != "approved"
+            or not isinstance(start, str)
+            or not isinstance(end, str)
+            or not start <= key <= end
+        ):
+            continue
+        kind = request.get("type")
+        if kind == OVERTIME_GAIN:
+            gain_hours += _float(request.get("hours"))
+        elif kind == OVERTIME_REDUCTION:
+            reduction = True
+        else:
+            fraction += 0.5 if request.get("halfDay") else 1.0
+    return DayAbsences(min(fraction, 1.0), reduction, round(gain_hours * 60))
+
+
+def effective_target(raw: int, norm: int | None, absences: DayAbsences) -> int:
+    """Target that counts for the balance, whether or not Timebutler already adjusted it."""
+    base = raw if norm is None else norm
+    if absences.fraction > 0:
+        return min(raw, round(base * (1 - absences.fraction)))
+    if absences.reduction:
+        return max(raw, base)
+    return raw
+
+
+def _norms(targets: dict[str, int], requests: list[dict[str, Any]]) -> dict[int, list[tuple[str, int]]]:
+    """Recorded targets of days without absence, per weekday, oldest first."""
+    norms: dict[int, list[tuple[str, int]]] = {}
+    for key in sorted(targets):
+        day = date.fromisoformat(key)
+        if not day_absences(requests, day).any:
+            norms.setdefault(day.weekday(), []).append((key, targets[key]))
+    return norms
+
+
+def _norm_before(norms: dict[int, list[tuple[str, int]]], day: date) -> int | None:
+    key = day.isoformat()
+    value = None
+    for other, minutes in norms.get(day.weekday(), []):
+        if other >= key:
+            break
+        value = minutes
+    return value
+
+
+def weekday_norm(day: date, targets: dict[str, int], requests: list[dict[str, Any]]) -> int | None:
+    """Recorded target of the latest earlier same weekday without absence."""
+    return _norm_before(_norms(targets, requests), day)
+
+
+def overtime_days(
+    first: date,
+    last: date,
+    entries: list[dict[str, Any]],
+    requests: list[dict[str, Any]],
+    targets: dict[str, int],
+) -> tuple[int, list[str]]:
+    """Sum of worked minus target from first to last (inclusive), and the estimated days."""
+    worked = _entry_totals(entries)
+    norms = _norms(targets, requests)
+    total = 0
+    estimated: list[str] = []
+    day = first
+    while day <= last:
+        key = day.isoformat()
+        norm = _norm_before(norms, day)
+        raw = targets.get(key)
+        if raw is None:
+            estimated.append(key)
+            raw = norm or 0
+        absences = day_absences(requests, day)
+        total += worked.get(key, 0) - effective_target(raw, norm, absences) + absences.gain_minutes
+        day += timedelta(days=1)
+    return total, estimated
+
+
+def months_between(first: date, last: date) -> list[tuple[int, int]]:
+    """(year, month) from first's month through last's month; at least last's month."""
+    months: list[tuple[int, int]] = []
+    year, month = first.year, first.month
+    while (year, month) <= (last.year, last.month):
+        months.append((year, month))
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return months or [(last.year, last.month)]
 
 
 def upcoming_absences(
