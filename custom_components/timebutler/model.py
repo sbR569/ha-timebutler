@@ -256,11 +256,15 @@ def effective_target(raw: int, norm: int | None, absences: DayAbsences) -> int:
 
 
 def _norms(targets: dict[str, int], requests: list[dict[str, Any]]) -> dict[int, list[tuple[str, int]]]:
-    """Recorded targets of days without absence, per weekday, oldest first."""
+    """Recorded targets of working days without absence, per weekday, oldest first.
+
+    Days with target 0 (public holidays, free days) are no norm: a half day or
+    AUA after a holiday must still be measured against a working day.
+    """
     norms: dict[int, list[tuple[str, int]]] = {}
     for key in sorted(targets):
         day = date.fromisoformat(key)
-        if not day_absences(requests, day).any:
+        if targets[key] > 0 and not day_absences(requests, day).any:
             norms.setdefault(day.weekday(), []).append((key, targets[key]))
     return norms
 
@@ -276,7 +280,7 @@ def _norm_before(norms: dict[int, list[tuple[str, int]]], day: date) -> int | No
 
 
 def weekday_norm(day: date, targets: dict[str, int], requests: list[dict[str, Any]]) -> int | None:
-    """Recorded target of the latest earlier same weekday without absence."""
+    """Recorded target of the latest earlier same weekday that was a working day without absence."""
     return _norm_before(_norms(targets, requests), day)
 
 

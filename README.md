@@ -103,7 +103,7 @@ Timebutler's API has no endpoint for the working-time account, so the integratio
 2. From the next day on, every finished day adds worked minus target time. The target is the one Timebutler reported for that day (recorded every minute while Home Assistant runs), so public holidays and part-time days come from Timebutler.
 3. Approved absences: a full day counts as neutral, a half day halves the target, `AUA` (overtime reduction) keeps the full target, `UEB` (overtime worked) adds its hours. Pending and rejected requests are ignored.
 
-Limits: a day Home Assistant was down for entirely uses the target of the last same weekday (listed in `geschaetzt`; a public holiday on such a day counts as a working day). Corrections in Timebutler older than the previous month are not picked up. When the value drifts from the web app, enter the current balance again in the options.
+Limits: a day Home Assistant was down for entirely uses the target of the last same weekday that was a working day (listed in `geschaetzt`; a public holiday on such a day counts as a working day). Corrections in Timebutler older than the previous month are not picked up. When the value drifts from the web app, enter the current balance again in the options.
 
 ## Development
 

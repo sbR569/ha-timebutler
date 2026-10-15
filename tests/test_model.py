@@ -598,3 +598,16 @@ def test_months_between():
     assert months_between(date(2026, 11, 20), date(2027, 2, 1)) == [(2026, 11), (2026, 12), (2027, 1), (2027, 2)]
     assert months_between(date(2026, 10, 5), date(2026, 10, 7)) == [(2026, 10)]
     assert months_between(date(2026, 10, 8), date(2026, 10, 7)) == [(2026, 10)]
+
+
+def test_weekday_norm_skips_days_without_target():
+    # Fridays: 2026-12-18 a working day, 12-25 and 2027-01-01 public holidays with target 0
+    targets = {"2026-12-18": 480, "2026-12-25": 0, "2027-01-01": 0}
+    assert weekday_norm(date(2027, 1, 8), targets, []) == 480
+
+
+def test_half_day_after_holidays_uses_the_working_norm():
+    targets = {"2026-12-18": 480, "2026-12-25": 0, "2027-01-01": 0, "2027-01-08": 480}
+    requests = [absence_dto("URL", "2027-01-08", half_day="morning")]
+    entries = [entry_dto("2027-01-08", 240)]
+    assert overtime_days(date(2027, 1, 8), date(2027, 1, 8), entries, requests, targets) == (0, [])

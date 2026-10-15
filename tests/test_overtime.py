@@ -1,5 +1,6 @@
 """OvertimeLedger: store, start value, recorded targets, freezing."""
 from datetime import date
+from unittest.mock import AsyncMock, patch
 
 from custom_components.timebutler.overtime import OvertimeLedger, storage_key
 from tests.common import absence_dto, entry_dto
@@ -162,3 +163,35 @@ async def test_remove_deletes_the_store(hass, hass_storage):
     await OvertimeLedger.async_remove(hass, "entry1")
 
     assert KEY not in hass_storage
+
+
+async def test_frozen_estimated_days_stay_listed(hass, hass_storage):
+    ledger = await _ledger(hass, 0, date(2026, 8, 30))
+    entries = [entry_dto("2026-08-31", 480)]
+
+    ledger.freeze(date(2026, 10, 15), entries, [])
+
+    assert ledger.frozen_through == date(2026, 8, 31)
+    assert ledger.balance(date(2026, 9, 2), entries, [])[1] == ["2026-08-31", "2026-09-01"]
+    await ledger.async_save()
+    reloaded = await _ledger(hass, 0, date(2026, 8, 30))
+    assert reloaded.balance(date(2026, 9, 2), entries, [])[1] == ["2026-08-31", "2026-09-01"]
+
+
+async def test_load_drops_invalid_target_dates(hass, hass_storage):
+    _stored(hass_storage, targets={"06.10.2026": 480, "2026-10-06": 480, "2026-10-07": "x"})
+
+    ledger = await _ledger(hass, 0, date(2026, 10, 5))
+
+    assert ledger.targets == {"2026-10-06": 480}
+    assert ledger.balance(date(2026, 10, 8), [], []) == (-480 - 0, ["2026-10-07"])
+
+
+async def test_load_survives_store_errors(hass):
+    ledger = OvertimeLedger(hass, "entry1", 0, date(2026, 10, 5))
+
+    with patch.object(ledger._store, "async_load", AsyncMock(side_effect=KeyError("version"))):
+        await ledger.async_load()
+
+    assert ledger.targets == {}
+    assert ledger.counted_from() == date(2026, 10, 6)
