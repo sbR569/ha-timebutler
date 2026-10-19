@@ -172,11 +172,12 @@ def month_minutes(
 
 
 def months_needed(today: date) -> list[tuple[int, int]]:
-    """Months to fetch: the current one, plus the previous if the week starts there."""
+    """Months to fetch: the current one, plus those where this and last week start."""
     monday = today - timedelta(days=today.weekday())
     months = [(today.year, today.month)]
-    if (monday.year, monday.month) != months[0]:
-        months.append((monday.year, monday.month))
+    for start in (monday, monday - timedelta(days=7)):
+        if (start.year, start.month) not in months:
+            months.append((start.year, start.month))
     return months
 
 

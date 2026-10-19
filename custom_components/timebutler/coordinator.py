@@ -23,6 +23,7 @@ from .const import BACKGROUND_INTERVAL, DOMAIN, LIVE_INTERVAL
 from .model import (
     ClockState,
     TodaySummary,
+    holiday_dates,
     months_between,
     months_needed,
     parse_clock,
@@ -50,6 +51,7 @@ class BackgroundData:
     absences: list[dict[str, Any]]
     absence_types: dict[str, str]
     entries: list[dict[str, Any]]
+    feiertage: frozenset[date]
 
 
 class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
@@ -69,6 +71,15 @@ class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
         )
         self.client = client
         self.ledger = ledger
+        # (years, public holidays of those years): built once per year, it imports the holidays package.
+        self._holiday_cache: tuple[tuple[int, ...], frozenset[date]] | None = None
+
+    async def _holidays(self, today: date) -> frozenset[date]:
+        """Public holidays of this and next year (the next-free-day search reaches 60 days ahead)."""
+        years = (today.year, today.year + 1)
+        if self._holiday_cache is None or self._holiday_cache[0] != years:
+            self._holiday_cache = (years, await self.hass.async_add_executor_job(holiday_dates, years))
+        return self._holiday_cache[1]
 
     def _months(self, today: date) -> list[tuple[int, int]]:
         """The week/month sensors' months plus every month the balance still counts."""
@@ -98,7 +109,13 @@ class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
         except TimebutlerConnectionError as err:
             raise UpdateFailed(str(err)) from err
         self.ledger.freeze(today, entries, absences)
-        return BackgroundData(time_off=time_off, absences=absences, absence_types=types, entries=entries)
+        return BackgroundData(
+            time_off=time_off,
+            absences=absences,
+            absence_types=types,
+            entries=entries,
+            feiertage=await self._holidays(today),
+        )
 
 
 class TimebutlerLiveCoordinator(DataUpdateCoordinator[LiveData]):

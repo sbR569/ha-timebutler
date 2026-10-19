@@ -21,7 +21,7 @@ When Timebutler rejects the token later, Home Assistant asks for a new one (reau
 | `sensor.timebutler_rest_heute` | Remaining minutes (negative = overtime) |
 | `sensor.timebutler_fortschritt_heute` | Percent of today's target |
 | `sensor.timebutler_pause_heute` | Break minutes today |
-| `sensor.timebutler_arbeitszeit_woche` | Minutes this week; attribute `tage` (minutes per day, Mon–Sun) |
+| `sensor.timebutler_arbeitszeit_woche` | Minutes this week. Attributes (all days as `YYYY-MM-DD`, Mon–Sun): `tage` (minutes worked per day), `soll` (target minutes per day: recorded up to today, projected after, 0 on public holidays and weekends, reduced by approved absences), `abwesend` (day → `{art, halbtags}` for public holidays, `art` `Feiertag`, and approved absences of the week), `vorwoche` (`tage`, `soll` and `abwesend` of last week, same shapes), `naechster_freier_tag` / `naechster_freier_grund` (the next public holiday, full-day absence or weekend within 60 days, and why: `Feiertag`, the absence type or `Wochenende`; `null` if none) |
 | `sensor.timebutler_arbeitszeit_monat` | Minutes this month; attributes `tage`, `arbeitstage` |
 | `sensor.timebutler_urlaub_rest` | Vacation days left; attributes `gesamt`, `genehmigt`, `beantragt` |
 | `sensor.timebutler_krankheitstage` | Sick days this year |
@@ -29,6 +29,8 @@ When Timebutler rejects the token later, Home Assistant asks for a new one (reau
 | `sensor.timebutler_ueberstunden` | Overtime balance in minutes up to the end of yesterday (negative = minus hours); unknown until a start value is set. Attributes `mit_heute` (balance if you stopped now), `stand_vom` (start date), `geschaetzt` (days whose target was estimated) |
 
 The clock and today's values refresh every minute, everything else every 15 minutes and right after you clock out.
+
+Public holidays come from the Python package [`holidays`](https://pypi.org/project/holidays/) (region: `HOLIDAY_REGION` in `const.py`, Schleswig-Holstein). Since 0.4.0 the integration requires it; Home Assistant installs it with the integration (HACS update, then restart), no manual step.
 
 ## Buttons
 

@@ -160,13 +160,20 @@ def test_month_has_every_day_and_sums_entries():
 @pytest.mark.parametrize(
     ("today", "expected"),
     [
-        (date(2026, 10, 7), [(2026, 10)]),
+        (date(2026, 10, 7), [(2026, 10), (2026, 9)]),
         (date(2026, 10, 1), [(2026, 10), (2026, 9)]),
         (date(2027, 1, 1), [(2027, 1), (2026, 12)]),
     ],
 )
 def test_months_needed(today, expected):
     assert months_needed(today) == expected
+
+
+def test_months_needed_includes_last_weeks_month():
+    # Monday: this week starts in November, last week started in October.
+    assert months_needed(date(2026, 11, 2)) == [(2026, 11), (2026, 10)]
+    # Both weeks lie in October.
+    assert months_needed(date(2026, 10, 22)) == [(2026, 10)]
 
 
 def test_upcoming_filters_sorts_and_names():

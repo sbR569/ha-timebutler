@@ -17,8 +17,11 @@ DEFAULT_RESPONSES = {
     "/time-tracking/time-off-summary": "time_off",
     "/absence-requests/my": "absences",
     "/absence-types": "absence_types",
-    "/time-entries/my": "entries_2026_10",
 }
+
+ENTRIES_PATH = "/time-entries/my"
+# Fixture (or entry list) per (year, month) that /time-entries/my answers by default; any other month is empty.
+DEFAULT_ENTRIES: dict[tuple[int, int], str | list[dict[str, Any]]] = {(2026, 10): "entries_2026_10"}
 
 
 def load_fixture_json(name: str) -> Any:
@@ -26,17 +29,34 @@ def load_fixture_json(name: str) -> Any:
     return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
-def mock_api(aioclient_mock, overrides: dict[str, str | dict] | None = None) -> None:
+def mock_api(
+    aioclient_mock,
+    overrides: dict[str, str | dict] | None = None,
+    entries: dict[tuple[int, int], str | list[dict[str, Any]]] | None = None,
+) -> None:
     """Answer every endpoint the integration uses.
 
     An override maps an API path to a fixture name or to keyword arguments
     for aioclient_mock (e.g. {"status": 401} or {"exc": TimeoutError()}).
+    /time-entries/my answers per month: `entries` maps (year, month) to a
+    fixture name or an entry list (default: October 2026 from the fixture),
+    every other month is empty. An override for the path answers every month.
     """
     overrides = overrides or {}
     for path, default in DEFAULT_RESPONSES.items():
         spec = overrides.get(path, default)
         kwargs = spec if isinstance(spec, dict) else {"json": load_fixture_json(spec)}
         aioclient_mock.get(f"{API_BASE}{path}", **kwargs)
+    url = f"{API_BASE}{ENTRIES_PATH}"
+    if ENTRIES_PATH in overrides:
+        spec = overrides[ENTRIES_PATH]
+        aioclient_mock.get(url, **(spec if isinstance(spec, dict) else {"json": load_fixture_json(spec)}))
+        return
+    # The first matching mock wins: the specific months before the catch-all.
+    for (year, month), spec in (DEFAULT_ENTRIES if entries is None else entries).items():
+        data = load_fixture_json(spec) if isinstance(spec, str) else spec
+        aioclient_mock.get(url, params={"year": year, "month": month}, json=data)
+    aioclient_mock.get(url, json=[])
 
 
 def remock(aioclient_mock, overrides: dict[str, str | dict] | None = None) -> None:

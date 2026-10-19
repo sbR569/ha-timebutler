@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -25,8 +25,12 @@ from .model import (
     CLOCK_STATES,
     ClockState,
     TodaySummary,
+    day_absence_kinds,
+    day_targets,
     month_minutes,
+    next_free_day,
     upcoming_absences,
+    week_days,
     week_minutes,
 )
 
@@ -103,7 +107,28 @@ def _clock_attrs(rt: TimebutlerRuntime) -> dict[str, Any] | None:
 
 
 def _week_attrs(rt: TimebutlerRuntime) -> dict[str, Any]:
-    return {"tage": _week(rt)}
+    attrs: dict[str, Any] = {"tage": _week(rt)}
+    background = rt.background.data
+    if background is None:
+        return attrs
+    today = dt_util.now().date()
+    monday = today - timedelta(days=today.weekday())
+    this_week = week_days(monday)
+    last_week = week_days(monday - timedelta(days=7))
+    requests, types, feiertage = background.absences, background.absence_types, background.feiertage
+    free = next_free_day(today, requests, types, feiertage)
+    return {
+        **attrs,
+        "soll": day_targets(this_week, today, rt.ledger.targets, requests, feiertage),
+        "abwesend": day_absence_kinds(this_week, requests, types, feiertage),
+        "vorwoche": {
+            "tage": week_minutes(background.entries, last_week[0], None),
+            "soll": day_targets(last_week, today, rt.ledger.targets, requests, feiertage),
+            "abwesend": day_absence_kinds(last_week, requests, types, feiertage),
+        },
+        "naechster_freier_tag": free[0] if free else None,
+        "naechster_freier_grund": free[1] if free else None,
+    }
 
 
 def _month_attrs(rt: TimebutlerRuntime) -> dict[str, Any]:
@@ -235,9 +260,22 @@ class TimebutlerSensor(TimebutlerEntity, SensorEntity):
     """A Timebutler value described by a TimebutlerSensorDescription."""
 
     _platform_domain = "sensor"
-    # Day maps and today's live balance change every minute while clocked in;
+    # Day maps and today's live balance change every minute while clocked in, and
+    # the week's targets, absences and next free day are bulky per-day data;
     # keep them out of history.
-    _unrecorded_attributes = frozenset({"tage", "liste", "mit_heute", "geschaetzt"})
+    _unrecorded_attributes = frozenset(
+        {
+            "tage",
+            "liste",
+            "mit_heute",
+            "geschaetzt",
+            "soll",
+            "abwesend",
+            "vorwoche",
+            "naechster_freier_tag",
+            "naechster_freier_grund",
+        }
+    )
     entity_description: TimebutlerSensorDescription
 
     def __init__(

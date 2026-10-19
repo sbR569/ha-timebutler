@@ -116,7 +116,8 @@ async def test_background_collects_data(aioclient_mock, coordinators, frozen_now
 async def test_background_fetches_previous_month_when_week_starts_there(aioclient_mock, coordinators, freezer):
     _, background = coordinators
     freezer.move_to("2026-10-01T17:00:00+00:00")
-    mock_api(aioclient_mock)
+    # September answers like October, so both months' entries arrive.
+    mock_api(aioclient_mock, entries={(2026, 10): "entries_2026_10", (2026, 9): "entries_2026_10"})
 
     await background.async_refresh()
 
@@ -199,7 +200,7 @@ async def test_background_fetches_only_the_usual_months_without_start(aioclient_
 
     await background.async_refresh()
 
-    assert _requested_months(aioclient_mock) == {("2026", "10")}
+    assert _requested_months(aioclient_mock) == {("2026", "10"), ("2026", "9")}
 
 
 async def test_background_fetches_months_since_start_and_freezes(aioclient_mock, coordinators, ledger, frozen_now):
