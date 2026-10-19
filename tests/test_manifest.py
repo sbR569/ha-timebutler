@@ -13,7 +13,7 @@ def test_manifest_version_matches_user_agent():
     )
     assert manifest["version"] == VERSION
     assert manifest["domain"] == "timebutler"
-    assert manifest["requirements"] == []
+    assert manifest["requirements"] == ["holidays"]
     assert USER_AGENT == f"ha-timebutler/{VERSION}"
 
 

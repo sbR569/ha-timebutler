@@ -19,3 +19,6 @@ EVENT_BREAK_REGULATION = f"{DOMAIN}_break_regulation"
 # Entry options: overtime balance start value (minutes) valid at the end of as_of (ISO date).
 OPT_BALANCE_MINUTES = "balance_minutes"
 OPT_AS_OF = "as_of"
+
+# Public holidays of the user's region: holidays.country_holidays(country, subdiv=...).
+HOLIDAY_REGION = ("DE", "SH")
