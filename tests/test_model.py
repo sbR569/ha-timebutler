@@ -13,16 +13,20 @@ from custom_components.timebutler.model import (
     absence_type_code,
     assignment_id,
     break_regulation_message,
+    day_absence_kinds,
     day_absences,
+    day_targets,
     effective_target,
     find_absence,
     find_time_entry,
     format_balance,
+    holiday_dates,
     local_timestamp_ms,
     match_item,
     month_minutes,
     months_between,
     months_needed,
+    next_free_day,
     overtime_days,
     parse_balance,
     parse_clock,
@@ -31,6 +35,7 @@ from custom_components.timebutler.model import (
     summary_includes_running,
     today_summary,
     upcoming_absences,
+    week_days,
     week_minutes,
     weekday_norm,
 )
@@ -42,6 +47,7 @@ TODAY = NOW.date()
 SUMMARY = load_fixture_json("work_summary")
 ENTRIES = load_fixture_json("entries_2026_10")
 TYPES = {"URL": "Urlaub", "GLZ": "Gleitzeit"}
+F26 = holiday_dates([2026])
 
 
 def _clock(status="running", started=datetime(2026, 10, 7, 5, 0, tzinfo=UTC), minutes=180, break_minutes=0):
@@ -154,13 +160,20 @@ def test_month_has_every_day_and_sums_entries():
 @pytest.mark.parametrize(
     ("today", "expected"),
     [
-        (date(2026, 10, 7), [(2026, 10)]),
+        (date(2026, 10, 7), [(2026, 10), (2026, 9)]),
         (date(2026, 10, 1), [(2026, 10), (2026, 9)]),
         (date(2027, 1, 1), [(2027, 1), (2026, 12)]),
     ],
 )
 def test_months_needed(today, expected):
     assert months_needed(today) == expected
+
+
+def test_months_needed_includes_last_weeks_month():
+    # Monday: this week starts in November, last week started in October.
+    assert months_needed(date(2026, 11, 2)) == [(2026, 11), (2026, 10)]
+    # Both weeks lie in October.
+    assert months_needed(date(2026, 10, 22)) == [(2026, 10)]
 
 
 def test_upcoming_filters_sorts_and_names():
@@ -611,3 +624,143 @@ def test_half_day_after_holidays_uses_the_working_norm():
     requests = [absence_dto("URL", "2027-01-08", half_day="morning")]
     entries = [entry_dto("2027-01-08", 240)]
     assert overtime_days(date(2027, 1, 8), date(2027, 1, 8), entries, requests, targets) == (0, [])
+
+
+WEEK_TYPES = {"URL": "Jahresurlaub", "UEB": "Ueberstunden", "AUA": "Ueberstundenabbau"}
+
+
+def test_week_days_monday_to_sunday():
+    days = week_days(date(2026, 10, 19))
+
+    assert len(days) == 7
+    assert days[0] == date(2026, 10, 19)
+    assert days[-1] == date(2026, 10, 25)
+    assert [day.weekday() for day in days] == [0, 1, 2, 3, 4, 5, 6]
+
+
+def test_holiday_dates_sh():
+    assert date(2026, 10, 31) in F26  # Reformationstag, a public holiday in Schleswig-Holstein
+    assert date(2026, 12, 25) in F26
+    assert date(2026, 10, 30) not in F26
+    assert date(2026, 12, 24) not in F26
+
+
+def test_day_targets_past_recorded_future_norm():
+    targets = {"2026-10-13": 468, "2026-10-19": 450, "2026-10-20": 468}
+    result = day_targets(week_days(date(2026, 10, 19)), date(2026, 10, 20), targets, [], F26)
+
+    assert result["2026-10-19"] == 450  # recorded
+    assert result["2026-10-20"] == 468  # recorded
+    assert result["2026-10-21"] == 468  # no Wednesday norm: today's target
+    assert result["2026-10-24"] == 0
+    assert result["2026-10-25"] == 0
+    assert list(result) == [day.isoformat() for day in week_days(date(2026, 10, 19))]
+
+
+def test_day_targets_unrecorded_past_day_uses_norm():
+    targets = {"2026-10-13": 470, "2026-10-21": 468}  # the Tuesday before, today
+    result = day_targets(week_days(date(2026, 10, 19)), date(2026, 10, 21), targets, [], F26)
+
+    assert result["2026-10-20"] == 470  # Tuesday norm
+    assert result["2026-10-19"] == 0  # a Monday never seen
+
+
+def test_day_targets_full_and_half_absence():
+    targets = {"2026-10-15": 468, "2026-10-20": 468}
+    requests = [
+        absence_dto("URL", "2026-10-21"),
+        absence_dto("URL", "2026-10-22", half_day="morning"),
+    ]
+    result = day_targets(week_days(date(2026, 10, 19)), date(2026, 10, 20), targets, requests, F26)
+
+    assert result["2026-10-21"] == 0
+    assert result["2026-10-22"] == 234  # Thursday norm 468 halved
+    assert result["2026-10-23"] == 468
+
+
+def test_day_targets_past_absence_follows_effective_target():
+    targets = {"2026-10-13": 468, "2026-10-14": 468, "2026-10-20": 468, "2026-10-21": 0, "2026-10-22": 468}
+    requests = [
+        absence_dto("URL", "2026-10-20", half_day="morning"),  # Timebutler left the target at 468
+        absence_dto("AUA", "2026-10-21", hours=8),  # Timebutler already set 0, the day still costs 468
+    ]
+    result = day_targets(week_days(date(2026, 10, 19)), date(2026, 10, 22), targets, requests, F26)
+
+    assert result["2026-10-20"] == 234
+    assert result["2026-10-21"] == 468
+
+
+def test_day_targets_future_holiday_is_zero():
+    targets = {"2026-12-18": 468, "2026-12-21": 468}
+    days = week_days(date(2026, 12, 21))
+
+    result = day_targets(days, date(2026, 12, 21), targets, [], F26)
+    assert result["2026-12-24"] == 468
+    assert result["2026-12-25"] == 0  # Friday norm 468 exists: only the holiday makes it 0
+    assert day_targets(days, date(2026, 12, 21), targets, [], frozenset())["2026-12-25"] == 468
+
+
+def test_day_absence_kinds():
+    requests = [
+        absence_dto("URL", "2026-10-23"),
+        absence_dto("URL", "2026-10-21", status="pending"),
+        absence_dto("UEB", "2026-10-22", hours=2),
+    ]
+
+    assert day_absence_kinds(week_days(date(2026, 10, 19)), requests, WEEK_TYPES, F26) == {
+        "2026-10-23": {"art": "Jahresurlaub", "halbtags": False},
+    }
+
+    kinds = day_absence_kinds(week_days(date(2026, 12, 21)), [], WEEK_TYPES, F26)
+    assert kinds == {
+        "2026-12-25": {"art": "Feiertag", "halbtags": False},
+        "2026-12-26": {"art": "Feiertag", "halbtags": False},
+    }
+
+
+def test_day_absence_kinds_half_day_range_and_unknown_type():
+    requests = [
+        absence_dto("URL", "2026-10-20", "2026-10-21"),
+        absence_dto("URL", "2026-10-22", half_day="afternoon"),
+        absence_dto("XYZ", "2026-10-23"),
+        absence_dto("AUA", "2026-10-19", hours=8),
+    ]
+
+    kinds = day_absence_kinds(week_days(date(2026, 10, 19)), requests, WEEK_TYPES, F26)
+
+    assert kinds["2026-10-20"] == {"art": "Jahresurlaub", "halbtags": False}
+    assert kinds["2026-10-21"] == {"art": "Jahresurlaub", "halbtags": False}
+    assert kinds["2026-10-22"] == {"art": "Jahresurlaub", "halbtags": True}
+    assert kinds["2026-10-23"] == {"art": "XYZ", "halbtags": False}
+    assert kinds["2026-10-19"] == {"art": "Ueberstundenabbau", "halbtags": False}
+
+
+def test_day_absence_kinds_holiday_beats_absence():
+    requests = [absence_dto("URL", "2026-12-24", "2026-12-28")]
+
+    kinds = day_absence_kinds(week_days(date(2026, 12, 21)), requests, WEEK_TYPES, F26)
+
+    assert kinds["2026-12-24"]["art"] == "Jahresurlaub"
+    assert kinds["2026-12-25"] == {"art": "Feiertag", "halbtags": False}
+    assert kinds["2026-12-26"] == {"art": "Feiertag", "halbtags": False}
+
+
+@pytest.mark.parametrize(
+    ("today", "requests", "expected"),
+    [
+        (date(2026, 10, 22), [], ("2026-10-24", "Wochenende")),
+        (date(2026, 10, 30), [], ("2026-10-31", "Feiertag")),  # Saturday and holiday: holiday wins
+        (date(2026, 12, 23), [], ("2026-12-25", "Feiertag")),
+        (date(2026, 10, 22), [absence_dto("URL", "2026-10-23")], ("2026-10-23", "Jahresurlaub")),
+        (date(2026, 10, 22), [absence_dto("URL", "2026-10-23", half_day="morning")], ("2026-10-24", "Wochenende")),
+        (date(2026, 10, 22), [absence_dto("UEB", "2026-10-23", hours=2)], ("2026-10-24", "Wochenende")),
+        (date(2026, 10, 22), [absence_dto("URL", "2026-10-23", status="pending")], ("2026-10-24", "Wochenende")),
+        (date(2026, 10, 22), [absence_dto("URL", "2026-10-24", "2026-10-26")], ("2026-10-24", "Jahresurlaub")),  # absence beats weekend
+    ],
+)
+def test_next_free_day(today, requests, expected):
+    assert next_free_day(today, requests, WEEK_TYPES, F26) == expected
+
+
+def test_next_free_day_starts_tomorrow():
+    assert next_free_day(date(2026, 10, 24), [], WEEK_TYPES, F26) == ("2026-10-25", "Wochenende")  # not today

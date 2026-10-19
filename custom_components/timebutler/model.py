@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import calendar
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import re
 from typing import Any
+
+from .const import HOLIDAY_REGION
 
 CLOCK_STATES = ("idle", "running", "paused", "waiting")
 CLOCKED_IN_STATES = ("running", "paused")
@@ -147,12 +150,17 @@ def _days(
     return result
 
 
+def week_days(monday: date) -> list[date]:
+    """The seven days from monday through Sunday."""
+    return [monday + timedelta(days=i) for i in range(7)]
+
+
 def week_minutes(
     entries: list[dict[str, Any]], today: date, today_worked: int | None
 ) -> dict[str, int]:
     """Minutes per day, Monday to Sunday of today's week."""
     monday = today - timedelta(days=today.weekday())
-    return _days(entries, [monday + timedelta(days=i) for i in range(7)], today, today_worked)
+    return _days(entries, week_days(monday), today, today_worked)
 
 
 def month_minutes(
@@ -164,11 +172,12 @@ def month_minutes(
 
 
 def months_needed(today: date) -> list[tuple[int, int]]:
-    """Months to fetch: the current one, plus the previous if the week starts there."""
+    """Months to fetch: the current one, plus those where this and last week start."""
     monday = today - timedelta(days=today.weekday())
     months = [(today.year, today.month)]
-    if (monday.year, monday.month) != months[0]:
-        months.append((monday.year, monday.month))
+    for start in (monday, monday - timedelta(days=7)):
+        if (start.year, start.month) not in months:
+            months.append((start.year, start.month))
     return months
 
 
@@ -220,21 +229,25 @@ def _float(value: Any) -> float:
         return 0.0
 
 
+def _approved_on(requests: list[dict[str, Any]], day: date) -> list[dict[str, Any]]:
+    """The approved requests covering day."""
+    key = day.isoformat()
+    return [
+        request
+        for request in requests
+        if request.get("status") == "approved"
+        and isinstance(request.get("startDate"), str)
+        and isinstance(request.get("endDate"), str)
+        and request["startDate"] <= key <= request["endDate"]
+    ]
+
+
 def day_absences(requests: list[dict[str, Any]], day: date) -> DayAbsences:
     """Combine the approved requests covering day."""
-    key = day.isoformat()
     fraction = 0.0
     reduction = False
     gain_hours = 0.0
-    for request in requests:
-        start, end = request.get("startDate"), request.get("endDate")
-        if (
-            request.get("status") != "approved"
-            or not isinstance(start, str)
-            or not isinstance(end, str)
-            or not start <= key <= end
-        ):
-            continue
+    for request in _approved_on(requests, day):
         kind = request.get("type")
         if kind == OVERTIME_GAIN:
             gain_hours += _float(request.get("hours"))
@@ -320,6 +333,11 @@ def months_between(first: date, last: date) -> list[tuple[int, int]]:
     return months or [(last.year, last.month)]
 
 
+def _type_name(request: dict[str, Any], types: dict[str, str]) -> str:
+    """Name of the request's absence type; the code itself when the type is unknown."""
+    return types.get(request.get("type"), request.get("type") or "")
+
+
 def upcoming_absences(
     requests: list[dict[str, Any]],
     types: dict[str, str],
@@ -342,13 +360,103 @@ def upcoming_absences(
             "id": request.get("id"),
             "von": request["startDate"],
             "bis": request["endDate"],
-            "art": types.get(request.get("type"), request.get("type") or ""),
+            "art": _type_name(request, types),
             "tage": request.get("days"),
             "status": request["status"],
             "halbtags": request.get("halfDay"),
         }
         for request in selected[:limit]
     ]
+
+
+def holiday_dates(years: Iterable[int]) -> frozenset[date]:
+    """Public holidays of HOLIDAY_REGION in the given years.
+
+    Loads the holidays package on first use, so call it from the executor.
+    """
+    import holidays
+
+    return frozenset(holidays.country_holidays(*HOLIDAY_REGION, years=years))
+
+
+def day_targets(
+    days: list[date],
+    today: date,
+    targets: dict[str, int],
+    requests: list[dict[str, Any]],
+    feiertage: frozenset[date],
+) -> dict[str, int]:
+    """Target minutes per day: the recorded ones up to today, projected ones after.
+
+    Up to today it is the effective target as the balance counts it. Later
+    days are 0 on public holidays and weekends; otherwise they follow the
+    weekday norm (today's target while that weekday has no norm yet), reduced
+    by approved absences.
+    """
+    norms = _norms(targets, requests)
+    result: dict[str, int] = {}
+    for day in days:
+        norm = _norm_before(norms, day)
+        if day <= today:
+            raw = targets.get(day.isoformat())
+            if raw is None:
+                raw = norm or 0
+        elif day in feiertage or day.weekday() >= 5:
+            result[day.isoformat()] = 0
+            continue
+        else:
+            raw = norm if norm is not None else targets.get(today.isoformat(), 0)
+        result[day.isoformat()] = effective_target(raw, norm, day_absences(requests, day))
+    return result
+
+
+def day_absence_kinds(
+    days: list[date],
+    requests: list[dict[str, Any]],
+    types: dict[str, str],
+    feiertage: frozenset[date],
+) -> dict[str, dict[str, Any]]:
+    """Why a day is not an ordinary working day: public holiday or approved absence.
+
+    Overtime worked (UEB) is no absence. A full-day request wins over a half-day one.
+    """
+    kinds: dict[str, dict[str, Any]] = {}
+    for day in days:
+        if day in feiertage:
+            kinds[day.isoformat()] = {"art": "Feiertag", "halbtags": False}
+            continue
+        covering = [
+            request for request in _approved_on(requests, day) if request.get("type") != OVERTIME_GAIN
+        ]
+        if covering:
+            request = min(covering, key=lambda item: bool(item.get("halfDay")))
+            kinds[day.isoformat()] = {
+                "art": _type_name(request, types),
+                "halbtags": bool(request.get("halfDay")),
+            }
+    return kinds
+
+
+def next_free_day(
+    today: date,
+    requests: list[dict[str, Any]],
+    types: dict[str, str],
+    feiertage: frozenset[date],
+) -> tuple[str, str] | None:
+    """First day from tomorrow on within 60 days that is free, and why.
+
+    Free is a public holiday, a full-day absence (no overtime, no half day) or a
+    weekend, in that order of precedence.
+    """
+    days = [today + timedelta(days=i) for i in range(1, 61)]
+    kinds = day_absence_kinds(days, requests, types, feiertage)
+    for day in days:
+        kind = kinds.get(day.isoformat())
+        if kind is not None and not kind["halbtags"]:
+            return day.isoformat(), kind["art"]
+        if day.weekday() >= 5:
+            return day.isoformat(), "Wochenende"
+    return None
 
 
 class InputError(Exception):
