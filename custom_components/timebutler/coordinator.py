@@ -75,8 +75,12 @@ class TimebutlerBackgroundCoordinator(DataUpdateCoordinator[BackgroundData]):
         self._holiday_cache: tuple[tuple[int, ...], frozenset[date]] | None = None
 
     async def _holidays(self, today: date) -> frozenset[date]:
-        """Public holidays of this and next year (the next-free-day search reaches 60 days ahead)."""
-        years = (today.year, today.year + 1)
+        """Public holidays of last, this and next year.
+
+        Last week reaches into the previous year in early January; the next-free-day
+        search reaches 60 days into the next.
+        """
+        years = (today.year - 1, today.year, today.year + 1)
         if self._holiday_cache is None or self._holiday_cache[0] != years:
             self._holiday_cache = (years, await self.hass.async_add_executor_job(holiday_dates, years))
         return self._holiday_cache[1]

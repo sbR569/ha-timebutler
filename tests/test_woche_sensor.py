@@ -34,6 +34,13 @@ def monday_in_november(freezer):
     return freezer
 
 
+@pytest.fixture
+def new_years_day(freezer):
+    """Thursday 2026-01-01, 09:00 US/Pacific: last week (2025-12-22..28) lies in the previous year."""
+    freezer.move_to("2026-01-01T17:00:00+00:00")
+    return freezer
+
+
 def _store_targets(hass_storage, targets):
     hass_storage[KEY] = {
         "version": 1,
@@ -159,6 +166,31 @@ async def test_last_week_in_previous_month_is_fetched(hass, aioclient_mock, mond
     assert days["2026-11-01"] == 100
 
 
+async def test_last_week_in_december_has_its_holidays(hass, aioclient_mock, hass_storage, new_years_day):
+    # Timebutler reports a target of 0 on a public holiday.
+    _store_targets(
+        hass_storage,
+        {"2025-12-22": 468, "2025-12-23": 468, "2025-12-24": 468, "2025-12-25": 0, "2025-12-26": 0},
+    )
+
+    await _setup(hass, aioclient_mock)
+
+    attributes = hass.states.get(ENTITY).attributes
+    holiday = {"art": "Feiertag", "halbtags": False}
+    assert attributes["vorwoche"]["abwesend"] == {"2025-12-25": holiday, "2025-12-26": holiday}
+    assert attributes["vorwoche"]["soll"] == {
+        "2025-12-22": 468,
+        "2025-12-23": 468,
+        "2025-12-24": 468,
+        "2025-12-25": 0,
+        "2025-12-26": 0,
+        "2025-12-27": 0,
+        "2025-12-28": 0,
+    }
+    # Today is New Year's Day.
+    assert attributes["abwesend"] == {"2026-01-01": holiday}
+
+
 async def test_holidays_are_built_once_per_year(hass, aioclient_mock, frozen_now):
     with patch(HOLIDAYS, wraps=holiday_dates) as build:
         entry = await _setup(hass, aioclient_mock)
@@ -166,7 +198,7 @@ async def test_holidays_are_built_once_per_year(hass, aioclient_mock, frozen_now
         await background.async_refresh()
         await background.async_refresh()
 
-    build.assert_called_once_with((2026, 2027))
+    build.assert_called_once_with((2025, 2026, 2027))
 
 
 async def test_holidays_are_rebuilt_when_the_year_changes(hass, aioclient_mock, freezer):
@@ -176,7 +208,7 @@ async def test_holidays_are_rebuilt_when_the_year_changes(hass, aioclient_mock, 
         freezer.move_to("2027-01-04T17:00:00+00:00")
         await entry.runtime_data.background.async_refresh()
 
-    assert [call.args for call in build.call_args_list] == [((2026, 2027),), ((2027, 2028),)]
+    assert [call.args for call in build.call_args_list] == [((2025, 2026, 2027),), ((2026, 2027, 2028),)]
 
 
 async def test_week_attributes_are_not_recorded(hass, aioclient_mock, frozen_now):
