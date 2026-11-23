@@ -38,6 +38,7 @@ from custom_components.timebutler.model import (
     week_days,
     week_minutes,
     weekday_norm,
+    with_target,
 )
 from tests.common import absence_dto, entry_dto, load_fixture_json
 
@@ -111,6 +112,25 @@ def test_today_uses_summary_as_is_when_it_includes_running():
     today = today_summary(SUMMARY, _clock(), includes_running=True, now=NOW)
 
     assert today == TodaySummary(commitment=480, worked=60, remaining=420, percent=13, break_minutes=15)
+
+
+def test_with_target_keeps_an_unchanged_summary():
+    today = TodaySummary(commitment=480, worked=60, remaining=420, percent=13, break_minutes=15)
+
+    assert with_target(today, 480) is today
+
+
+def test_with_target_recomputes_rest_and_progress():
+    today = TodaySummary(commitment=480, worked=60, remaining=420, percent=13, break_minutes=15)
+
+    assert with_target(today, 240) == TodaySummary(
+        commitment=240, worked=60, remaining=180, percent=25, break_minutes=15, api_commitment=480
+    )
+    assert with_target(today, 0) == TodaySummary(
+        commitment=0, worked=60, remaining=-60, percent=0, break_minutes=15, api_commitment=480
+    )
+    assert with_target(today, 0).raw_commitment == 480
+    assert today.raw_commitment == 480
 
 
 def test_today_session_across_midnight_counts_only_since_midnight():

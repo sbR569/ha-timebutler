@@ -17,7 +17,7 @@ When Timebutler rejects the token later, Home Assistant asks for a new one (reau
 | `sensor.timebutler_stempeluhr` | Clock state `idle`/`running`/`paused`/`waiting`; attributes `seit` (start), `dienstreise` |
 | `binary_sensor.timebutler_eingestempelt` | On while the clock runs or is paused |
 | `sensor.timebutler_arbeitszeit_heute` | Minutes worked today, including the running session |
-| `sensor.timebutler_soll_heute` | Target minutes today |
+| `sensor.timebutler_soll_heute` | Target minutes today: Timebutler's target, reduced by approved absences as in the week sensor's `soll` (0 on a full day off, half the weekday's usual target on a half day); `rest_heute` and `fortschritt_heute` follow it. Overtime reduction (`AUA`) keeps the target |
 | `sensor.timebutler_rest_heute` | Remaining minutes (negative = overtime) |
 | `sensor.timebutler_fortschritt_heute` | Percent of today's target |
 | `sensor.timebutler_pause_heute` | Break minutes today |

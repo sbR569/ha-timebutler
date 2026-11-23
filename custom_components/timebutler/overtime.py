@@ -127,9 +127,13 @@ class OvertimeLedger:
 
     def today_difference(self, today: date, worked: int, target: int, requests: list[dict[str, Any]]) -> int:
         """Today's worked minus target with the absence rules, from live values."""
-        absences = day_absences(requests, today)
+        gain = day_absences(requests, today).gain_minutes
+        return worked - self.today_target(today, target, requests) + gain
+
+    def today_target(self, today: date, target: int, requests: list[dict[str, Any]]) -> int:
+        """Timebutler's target for today with the absence rules, as the balance counts it."""
         norm = weekday_norm(today, self.targets, requests)
-        return worked - effective_target(target, norm, absences) + absences.gain_minutes
+        return effective_target(target, norm, day_absences(requests, today))
 
     async def async_save(self) -> None:
         """Write the store now."""

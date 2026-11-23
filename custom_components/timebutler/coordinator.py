@@ -29,6 +29,7 @@ from .model import (
     parse_clock,
     summary_includes_running,
     today_summary,
+    with_target,
 )
 from .overtime import OvertimeLedger
 
@@ -167,7 +168,12 @@ class TimebutlerLiveCoordinator(DataUpdateCoordinator[LiveData]):
         entries = self._background.data.entries if self._background.data else []
         includes_running = summary_includes_running(summary, clock, entries, now)
         today = today_summary(summary, clock, includes_running, now)
-        self._background.ledger.record_target(now.date(), today.commitment)
+        ledger = self._background.ledger
+        # The ledger keeps Timebutler's own value; the sensors show the target that applies today.
+        ledger.record_target(now.date(), today.commitment)
+        if self._background.data is not None:
+            target = ledger.today_target(now.date(), today.commitment, self._background.data.absences)
+            today = with_target(today, target)
         return LiveData(clock=clock, today=today)
 
 
