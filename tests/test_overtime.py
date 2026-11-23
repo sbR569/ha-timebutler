@@ -157,6 +157,19 @@ async def test_today_difference_uses_absence_rules(hass):
     assert ledger.today_difference(tuesday, 480, 480, gain) == 60
 
 
+async def test_today_target_follows_the_absence_rules(hass):
+    ledger = await _ledger(hass)
+    ledger.record_target(date(2026, 10, 6), 450)  # Tuesday norm
+    tuesday = date(2026, 10, 13)
+
+    assert ledger.today_target(tuesday, 480, []) == 480
+    assert ledger.today_target(tuesday, 480, [absence_dto("URL", "2026-10-13")]) == 0
+    assert ledger.today_target(tuesday, 480, [absence_dto("URL", "2026-10-13", half_day="morning")]) == 225
+    assert ledger.today_target(tuesday, 480, [absence_dto("URL", "2026-10-13", status="pending")]) == 480
+    # Overtime reduction keeps the target: the day counts against the balance.
+    assert ledger.today_target(tuesday, 0, [absence_dto("AUA", "2026-10-13", hours=8)]) == 450
+
+
 async def test_remove_deletes_the_store(hass, hass_storage):
     _stored(hass_storage, targets={})
 

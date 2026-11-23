@@ -176,7 +176,7 @@ def _overtime_attrs(rt: TimebutlerRuntime) -> dict[str, Any] | None:
     with_today = None
     if today is not None:
         with_today = balance + rt.ledger.today_difference(
-            dt_util.now().date(), today.worked, today.commitment, rt.background.data.absences
+            dt_util.now().date(), today.worked, today.raw_commitment, rt.background.data.absences
         )
     return {"mit_heute": with_today, "stand_vom": rt.ledger.as_of.isoformat(), "geschaetzt": estimated}
 

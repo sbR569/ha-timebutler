@@ -43,6 +43,13 @@ class TodaySummary:
     remaining: int
     percent: int
     break_minutes: int
+    # Timebutler's own target, set when `commitment` was adjusted for an absence.
+    api_commitment: int | None = None
+
+    @property
+    def raw_commitment(self) -> int:
+        """Today's target as Timebutler reports it."""
+        return self.commitment if self.api_commitment is None else self.api_commitment
 
 
 def _int(value: Any) -> int:
@@ -127,6 +134,25 @@ def today_summary(
         remaining=commitment - worked,
         percent=percent,
         break_minutes=break_minutes,
+    )
+
+
+def with_target(today: TodaySummary, target: int) -> TodaySummary:
+    """Today measured against target instead of Timebutler's own commitment.
+
+    Timebutler reports the full target on a day with an approved absence;
+    rest and progress follow the target that really applies.
+    """
+    if target == today.commitment:
+        return today
+    percent = math.floor(today.worked * 100 / target + 0.5) if target > 0 else 0
+    return TodaySummary(
+        commitment=target,
+        worked=today.worked,
+        remaining=target - today.worked,
+        percent=percent,
+        break_minutes=today.break_minutes,
+        api_commitment=today.raw_commitment,
     )
 
 
